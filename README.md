@@ -316,5 +316,22 @@ MIT
 ## Local-service recovery
 
 Cloud-capable entries can fall back to cloud control when the controller's LAN
-service fails. Version 1.8.0 adds a manual soft-reboot action and opt-in automatic
-recovery with persistent attempt limits. See [recovery configuration and limits](RECOVERY.md).
+service fails. A manual soft-reboot action and opt-in automatic recovery can
+restore the controller's local service. The Now playing sensor's
+`recovery_status` attribute explains whether recovery is waiting, in cooldown,
+or exhausted for the current outage.
+
+If automatic recovery is exhausted, an administrator can re-arm it in
+**Developer tools → Actions**:
+
+```yaml
+action: gemstone_lights.rearm_recovery
+data:
+  controller: light.your_controller
+```
+
+Automatic recovery must already be enabled. Re-arming resets the failure
+observation window and preserves the cooldown from the last reboot attempt.
+Another attempt requires fresh LAN failures spanning the configured duration
+and expiry of the remaining cooldown. The action itself does not reboot the
+controller or change its settings. See [recovery configuration and limits](RECOVERY.md).

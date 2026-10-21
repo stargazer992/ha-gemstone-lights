@@ -39,21 +39,31 @@ class RecoveryPolicy:
 
     def recovered(self, device: str) -> None:
         """End an outage without clearing the cross-outage cooldown."""
+        self.rearm(device)
+
+    def rearm(self, device: str) -> None:
+        """Allow a new observation window without forgetting the last attempt."""
         self.failures.pop(device, None)
         if device in self.history:
             self.history[device]["attempted_outage"] = False
 
-    def due(self, device: str, now: float, delay: float, cooldown: float) -> bool:
-        """Require three actual probes, sustained failure and an unused attempt."""
+    def status(self, device: str, now: float, delay: float, cooldown: float) -> str:
+        """Explain the same observation and attempt limits used for recovery."""
         failure = self.failures.get(device)
         history = self.history.get(device, {})
-        return bool(
-            failure
-            and failure[2] >= 3
-            and now - failure[1] >= delay
-            and not history.get("attempted_outage", False)
-            and now - history.get("last_attempt", float("-inf")) >= cooldown
-        )
+        if history.get("attempted_outage", False):
+            return "exhausted"
+        if now - history.get("last_attempt", float("-inf")) < cooldown:
+            return "cooldown"
+        if not failure:
+            return "monitoring"
+        if failure[2] < 3 or now - failure[1] < delay:
+            return "waiting"
+        return "ready"
+
+    def due(self, device: str, now: float, delay: float, cooldown: float) -> bool:
+        """Require three actual probes, sustained failure and an unused attempt."""
+        return self.status(device, now, delay, cooldown) == "ready"
 
     def reserve(self, device: str, now: float) -> None:
         """Consume one attempt even if the network response is later lost."""
