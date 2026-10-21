@@ -1,18 +1,6 @@
 # Changelog
 
-## Unreleased
-
-- Add an administrator action to re-arm automatic recovery after an unsuccessful
-  attempt. It resets the failure observation window, preserves the cooldown and
-  saves the change across reloads and restarts without rebooting the controller.
-- Expose recovery status, attempt and cooldown timestamps, and failed-probe
-  observations on the Now playing sensor so recovery delays and exhausted
-  attempts are visible.
-- Restore the in-memory recovery allowance when saving a reboot attempt fails.
-  No reboot is sent unless its cooldown is persisted, and a failed save no
-  longer falsely exhausts recovery.
-
-## 1.8.1 — Unreleased
+## 1.8.1 — 2026-10-21
 
 - Require an explicit, unchecked-by-default opt-in before account mode enables
   "Allow Local Commands" on controllers. Setup and options explain that this
@@ -22,6 +10,15 @@
   current setting is left unchanged.
 - Preserve LAN use for controllers already enabled and cloud control when local
   commands are disabled. Local-only and Bluetooth behavior remain unchanged.
+- Add an administrator action to re-arm automatic recovery after an unsuccessful
+  attempt. It resets the failure observation window, preserves the cooldown and
+  saves the change across reloads and restarts without rebooting the controller.
+- Expose recovery status, attempt and cooldown timestamps, and failed-probe
+  observations on the Now playing sensor so recovery delays and exhausted
+  attempts are visible.
+- Restore the in-memory recovery allowance when saving a reboot attempt fails.
+  No reboot is sent unless its cooldown is persisted, and a failed save no
+  longer falsely exhausts recovery.
 
 ## 1.8.0
 
