@@ -43,7 +43,11 @@ from .local_api import GemstoneLocalApi, GemstoneLocalError
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_SCHEMA = vol.Schema(
-    {vol.Required(CONF_EMAIL): str, vol.Required(CONF_PASSWORD): str}
+    {
+        vol.Required(CONF_EMAIL): str,
+        vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_ENABLE_LOCAL, default=False): bool,
+    }
 )
 
 
@@ -58,7 +62,7 @@ OPTIONS_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=1, max=168)
         ),
         vol.Optional(CONF_PREFER_LOCAL, default=True): bool,
-        vol.Optional(CONF_ENABLE_LOCAL, default=True): bool,
+        vol.Optional(CONF_ENABLE_LOCAL, default=False): bool,
         vol.Optional(CONF_ENABLE_LIBRARY, default=True): bool,
         vol.Optional(CONF_HOST, default=""): str,
         vol.Optional(CONF_BLUETOOTH_ADDRESS, default=""): str,
@@ -91,6 +95,7 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle setup, options and re-authentication."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
@@ -295,6 +300,9 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title=email,
                     data={CONF_EMAIL: email, CONF_PASSWORD: user_input[CONF_PASSWORD]},
+                    options={
+                        CONF_ENABLE_LOCAL: user_input.get(CONF_ENABLE_LOCAL, False)
+                    },
                 )
 
         return self.async_show_form(
@@ -413,7 +421,7 @@ class GemstoneOptionsFlow(OptionsFlow):
                     CONF_RECOVERY_COOLDOWN: user_input.get(CONF_RECOVERY_COOLDOWN, 6),
                     CONF_PREFER_LOCAL: local_only
                     or user_input.get(CONF_PREFER_LOCAL, True),
-                    CONF_ENABLE_LOCAL: user_input.get(CONF_ENABLE_LOCAL, True),
+                    CONF_ENABLE_LOCAL: user_input.get(CONF_ENABLE_LOCAL, False),
                     CONF_ENABLE_LIBRARY: user_input.get(CONF_ENABLE_LIBRARY, True),
                     CONF_HOST: host,
                     CONF_BLUETOOTH_ADDRESS: address,

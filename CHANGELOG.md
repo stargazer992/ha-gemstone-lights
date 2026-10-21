@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.1 — Unreleased
+
+- Require an explicit, unchecked-by-default opt-in before account mode enables
+  "Allow Local Commands" on controllers. Setup and options explain that this
+  exposes unauthenticated HTTP control on the LAN.
+- Reset the previous automatic-enable preference during upgrade because older
+  versions preselected it. Users can opt in again in Configure; the controller's
+  current setting is left unchanged.
+- Preserve LAN use for controllers already enabled and cloud control when local
+  commands are disabled. Local-only and Bluetooth behavior remain unchanged.
+
 ## 1.8.0
 
 - Add an administrator soft-reboot action using the app's captured cloud POST protocol.

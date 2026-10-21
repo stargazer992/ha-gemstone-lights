@@ -70,7 +70,7 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         host_override: str | None = None,
         host_device_id: str | None = None,
         prefer_local: bool = True,
-        enable_local: bool = True,
+        enable_local: bool = False,
         enable_library: bool = True,
         auto_recovery: bool = False,
         recovery_delay_minutes: int = 10,
@@ -401,8 +401,7 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     or dt_util.utcnow() >= self._enable_retry_after[device_id]
                 )
             ):
-                # The switch can be flipped from the cloud, so offer to do it
-                # rather than making the user go into the app.
+                # Change the controller's setting only after the user opts in.
                 self._enable_attempted.add(device_id)
                 self.config_entry.async_create_background_task(
                     self.hass,
@@ -433,9 +432,9 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return client
 
     async def _async_enable_local(self, device_id: str) -> None:
-        """Switch on the controller's local commands via the cloud."""
+        """Switch on local commands via the cloud with the user's consent."""
         try:
-            if self.api is None:
+            if not self._enable_local or self.api is None:
                 return
             await self.api.async_set_local_enabled(device_id, True)
         except GemstoneError as err:
