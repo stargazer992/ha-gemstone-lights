@@ -84,8 +84,19 @@ vendor app's Bluetooth connection before HA connects.
 ## Local control
 
 "Allow Local Commands" (Device Settings → Advanced Settings in the Gemstone app)
-opens the controller's HTTP port. Account mode can enable it through the cloud;
-local-only mode requires it to be enabled beforehand. The Now playing sensor's
+opens an unauthenticated HTTP service on the controller's LAN address. In account
+setup or **Configure**, the **Automatically enable Allow Local Commands** option
+lets the integration turn this setting on for the account's controllers. It is
+unchecked by default. Leaving it unchecked keeps the controller setting unchanged:
+controllers already enabled can still use LAN; otherwise, account mode uses cloud
+control. Local-only LAN setup requires the setting to be enabled beforehand.
+
+Upgrading to 1.8.1 clears the integration's previous automatic-enable preference
+because it was preselected in older versions. Opt in again under **Configure** if
+you want this behavior. The upgrade does not change the controller's current
+"Allow Local Commands" setting.
+
+The Now playing sensor's
 `control` attribute reports `local` (LAN), `bluetooth`, or `cloud`. Bluetooth
 state control does not require the HTTP local-command switch.
 

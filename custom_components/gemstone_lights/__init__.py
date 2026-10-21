@@ -59,6 +59,21 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> bool:
+    """Require explicit consent after the previous auto-enable default."""
+    if entry.version > 1:
+        return False
+    if entry.version == 1 and entry.minor_version < 2:
+        # Older options forms saved True by default, so that value cannot prove
+        # consent. Reset only this integration option, never the device setting.
+        hass.config_entries.async_update_entry(
+            entry,
+            options={**entry.options, CONF_ENABLE_LOCAL: False},
+            minor_version=2,
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> bool:
     """Set up Gemstone Lights from a config entry."""
     local_only = entry.data.get(CONF_LOCAL_ONLY, False) or entry.options.get(
@@ -86,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> 
         host_device_id=entry.options.get(CONF_HOST_DEVICE)
         or (entry.data.get(CONF_LOCAL_DEVICE) or {}).get("id"),
         prefer_local=entry.options.get(CONF_PREFER_LOCAL, True),
-        enable_local=entry.options.get(CONF_ENABLE_LOCAL, True),
+        enable_local=entry.options.get(CONF_ENABLE_LOCAL, False),
         enable_library=entry.options.get(CONF_ENABLE_LIBRARY, True),
         auto_recovery=entry.options.get(CONF_AUTO_RECOVERY, False),
         recovery_delay_minutes=entry.options.get(CONF_RECOVERY_DELAY, 10),

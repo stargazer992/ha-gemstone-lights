@@ -21,7 +21,11 @@
         "description": "Sign in with the same account you use in the Gemstone Lights app.",
         "data": {
           "email": "Email",
-          "password": "Password"
+          "password": "Password",
+          "enable_local": "Automatically enable Allow Local Commands"
+        },
+        "data_description": {
+          "enable_local": "Opt in to let this integration enable Allow Local Commands on your account controllers, exposing unauthenticated HTTP control on your LAN. Leave unchecked to keep the controller setting unchanged and use cloud control when local commands are disabled. Controllers already enabled can still use LAN."
         }
       },
       "local": {
@@ -89,7 +93,7 @@
         "data": {
           "prefer_local": "Use local control when available",
           "host": "Controller IP address (optional)",
-          "enable_local": "Switch on local control on the controller if it is off",
+          "enable_local": "Automatically enable Allow Local Commands",
           "enable_library": "Load Gemstone's official pattern library",
           "host_device_id": "Controller for address overrides",
           "local_only": "Disable all Gemstone cloud access",
@@ -97,6 +101,9 @@
           "auto_recovery": "Automatically soft reboot after persistent LAN failure (requires cloud)",
           "recovery_delay_minutes": "LAN failure duration before recovery (minutes)",
           "recovery_cooldown_hours": "Minimum time between automatic reboot attempts (hours)"
+        },
+        "data_description": {
+          "enable_local": "Opt in to let this integration enable Allow Local Commands on your account controllers, exposing unauthenticated HTTP control on your LAN. Leave unchecked to keep the controller setting unchanged and use cloud control when local commands are disabled. Controllers already enabled can still use LAN."
         }
       }
     },
