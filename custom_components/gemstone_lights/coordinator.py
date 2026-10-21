@@ -22,7 +22,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -52,6 +51,7 @@ from .geometry import decode_lights
 from .local_api import GemstoneLocalApi, GemstoneLocalError
 from .recovery import RecoveryPolicy
 from .state import encode_cloud_design, same_content, scale_color
+from .storage import GemstoneStore
 
 _LOGGER = logging.getLogger(__name__)
 _COMMAND_SETTLE_SECONDS = 5
@@ -102,7 +102,8 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._discovery_next: datetime | None = None
         self._cloud_available = api is not None
         self._reauth_started = False
-        self._store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self._store = GemstoneStore(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self._cache_lock = asyncio.Lock()
         self._saved_cache: dict[str, Any] | None = None
 
         # Gemstone's official pattern library, keyed by folder id.
@@ -171,6 +172,11 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_save_cache(self) -> None:
         """Persist discovery and catalogs, never passwords or session tokens."""
+        async with self._cache_lock:
+            await self._async_write_cache()
+
+    async def _async_write_cache(self) -> None:
+        """Write a fresh snapshot while holding the shared cache lock."""
         devices = []
         for device in self._known_devices:
             info = {
@@ -345,6 +351,92 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     # -- transport ----------------------------------------------------------
+
+    def recovery_details(self, device_id: str) -> dict[str, Any]:
+        """Explain automatic recovery without making network requests."""
+        now = dt_util.utcnow().timestamp()
+        history = self.recovery.history.get(device_id, {})
+        failure = self.recovery.failures.get(device_id)
+        last_attempt = history.get("last_attempt")
+        cooldown_until = (
+            last_attempt + self._recovery_cooldown if last_attempt is not None else None
+        )
+        info = self.device_info_raw(device_id)
+        if self.api is None:
+            status = "local_only"
+        elif not self._auto_recovery:
+            status = "disabled"
+        elif not self._prefer_local:
+            status = "local_not_preferred"
+        elif self.bluetooth_address(device_id):
+            status = "bluetooth"
+        elif self.is_local(device_id):
+            status = "local_available"
+        elif (info.get("hub") or {}).get("tcpEnabled") is False:
+            status = "local_commands_disabled"
+        elif self._reauth_started or not self._cloud_available:
+            status = "cloud_unavailable"
+        else:
+            status = self.recovery.status(
+                device_id, now, self._recovery_delay, self._recovery_cooldown
+            )
+
+        def timestamp(value: float | None) -> str | None:
+            if value is None:
+                return None
+            try:
+                return dt_util.utc_from_timestamp(value).isoformat()
+            except ValueError, OverflowError, OSError:
+                return None
+
+        return {
+            "recovery_status": status,
+            "recovery_last_attempt": timestamp(last_attempt),
+            "recovery_cooldown_until": timestamp(cooldown_until),
+            "recovery_failure_since": timestamp(failure[1] if failure else None),
+            "recovery_failed_probes": failure[2] if failure else 0,
+        }
+
+    @serialized
+    async def async_rearm_recovery(self, device_id: str) -> None:
+        """Reset the outage limit while retaining cooldown and requiring fresh probes."""
+        if device_id not in self._device_ids:
+            raise GemstoneError("Unknown Gemstone controller")
+        try:
+            await self._async_save_recovery(device_id)
+        except OSError as err:
+            raise GemstoneError(
+                "Could not persist recovery re-arm; recovery limits unchanged"
+            ) from err
+        self.async_update_listeners()
+        _LOGGER.info(
+            "Gemstone %s: LAN recovery re-armed; cooldown preserved and fresh failed probes required",
+            device_id,
+        )
+
+    async def _async_save_recovery(
+        self, device_id: str, *, attempt_at: float | None = None
+    ) -> None:
+        """Commit a reservation or explicit re-arm without leaking provisional state."""
+        async with self._cache_lock:
+            previous = deepcopy(self.recovery.history.get(device_id))
+            failure = self.recovery.failures.get(device_id)
+            if attempt_at is None:
+                self.recovery.rearm(device_id)
+            else:
+                self.recovery.reserve(device_id, attempt_at)
+            try:
+                await self._async_write_cache()
+            except OSError:
+                if previous is None:
+                    self.recovery.history.pop(device_id, None)
+                else:
+                    self.recovery.history[device_id] = previous
+                if failure is None:
+                    self.recovery.failures.pop(device_id, None)
+                else:
+                    self.recovery.failures[device_id] = failure
+                raise
 
     def _local_client(
         self, device_id: str, info: dict[str, Any]
@@ -636,9 +728,8 @@ class GemstoneCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except GemstoneAuthError as err:
             self._handle_cloud_error(err)
             raise
-        self.recovery.reserve(device_id, now)
         try:
-            await self._async_save_cache()
+            await self._async_save_recovery(device_id, attempt_at=now)
         except OSError as err:
             raise GemstoneError(
                 "Could not persist reboot cooldown; no reboot sent"

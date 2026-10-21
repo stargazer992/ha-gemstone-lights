@@ -78,4 +78,5 @@ class GemstoneNowPlaying(GemstoneEntity, SensorEntity):
             "outputs": settings.get("pixelOutputNames") or hub.get("outputNames"),
             "pixel_count": settings.get("pixelCount") or hub.get("pixelCount"),
             "rgbw_sequence": settings.get("rgbwSequence") or hub.get("rgbwSequence"),
+            **self.coordinator.recovery_details(self._device_id),
         }

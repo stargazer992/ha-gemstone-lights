@@ -234,6 +234,16 @@
           "description": "Select the whole-controller light, even if it is unavailable."
         }
       }
+    },
+    "rearm_recovery": {
+      "name": "Re-arm automatic recovery",
+      "description": "Allow another automatic recovery attempt after fresh LAN failures and the remaining cooldown. Automatic recovery must already be enabled. This action does not reboot the controller or change its settings.",
+      "fields": {
+        "controller": {
+          "name": "Controller",
+          "description": "Select the whole-controller light, even if it is unavailable."
+        }
+      }
     }
   }
 }
