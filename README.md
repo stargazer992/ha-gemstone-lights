@@ -2,6 +2,11 @@
 
 # Gemstone Lights for Home Assistant
 
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5)](https://my.home-assistant.io/redirect/hacs_repository/?owner=xagon0&repository=ha-gemstone-lights&category=integration)
+[![Latest release](https://img.shields.io/github/v/release/xagon0/ha-gemstone-lights)](https://github.com/xagon0/ha-gemstone-lights/releases/latest)
+[![Validate](https://github.com/xagon0/ha-gemstone-lights/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/xagon0/ha-gemstone-lights/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/xagon0/ha-gemstone-lights)](LICENSE)
+
 **Local control** for [Gemstone Lights](https://www.gemstonelights.com/)
 **Hub2** in Home Assistant.
 
@@ -10,6 +15,13 @@ Bluetooth, with optional Gemstone account import and cloud fallback.
 **Local-only mode needs no account and makes no Gemstone cloud
 requests.** See [Local operation](LOCAL_OPERATION.md) for offline setup, content
 editing, playlists, schedules, evidence and the remaining protocol gaps.
+
+## Quick install
+
+[![Open Gemstone Lights in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=xagon0&repository=ha-gemstone-lights&category=integration)
+
+Requires HACS to be installed. Open the link, select **Download**, restart Home
+Assistant, then follow [Setup](#setup).
 
 ## Features
 
