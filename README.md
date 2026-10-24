@@ -53,9 +53,20 @@ version with Python 3.14.2 or newer within 3.14.
 
 ### HACS (recommended)
 
-1. In HACS, choose **Integrations** → three-dot menu → **Custom repositories**.
-2. Add this repository's URL with category **Integration**.
-3. Install **Gemstone Lights**, then restart Home Assistant.
+Gemstone Lights is included in the default HACS catalog.
+
+1. Open **HACS** in Home Assistant and search for **Gemstone Lights**.
+2. Open **Gemstone Lights** and select **Download**.
+3. Restart Home Assistant, then follow [Setup](#setup) below.
+
+#### Custom repository fallback
+
+If Gemstone Lights does not appear in search, add it as a custom repository:
+
+1. In HACS, open the three-dot menu → **Custom repositories**.
+2. Enter `https://github.com/xagon0/ha-gemstone-lights`, select type
+   **Integration**, and choose **Add**.
+3. Follow the search, download, and restart steps above.
 
 ### Manual
 
