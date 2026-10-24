@@ -2,12 +2,12 @@
 
 # Gemstone Lights for Home Assistant
 
-A custom integration for [Gemstone Lights](https://www.gemstonelights.com/)
-permanent outdoor lighting, controlling the **Hub2** controller from Home
-Assistant.
+**Local control** for [Gemstone Lights](https://www.gemstonelights.com/)
+**Hub2** in Home Assistant.
 
-Control Hub2 directly over your LAN or optional Bluetooth, with optional Gemstone account import and
-cloud fallback. **Local-only mode needs no account and makes no Gemstone cloud
+Control your permanent outdoor lighting directly over your LAN or optional
+Bluetooth, with optional Gemstone account import and cloud fallback.
+**Local-only mode needs no account and makes no Gemstone cloud
 requests.** See [Local operation](LOCAL_OPERATION.md) for offline setup, content
 editing, playlists, schedules, evidence and the remaining protocol gaps.
 
