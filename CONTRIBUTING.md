@@ -54,3 +54,12 @@ controller-specific address override.
 
 Keep fixes and their regression tests in separate logical commits. Preserve those
 commits when merging a release PR.
+
+## Protocol references
+
+- [Hub2 API reference](PROTOCOL.md): LAN and cloud requests, colour encoding,
+  patterns and designs.
+- [Bluetooth protocol](BLUETOOTH_PROTOCOL.md): local Bluetooth transport.
+- [Native management](MANAGEMENT_PROTOCOL.md): zone, timer and device settings
+  research, including features not implemented by the integration.
+- [Repository review](REVIEW.md): implementation findings and fixes.
