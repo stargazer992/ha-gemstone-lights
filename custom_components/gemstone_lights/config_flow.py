@@ -5,7 +5,6 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
-from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -20,22 +19,24 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 
-from .api import GemstoneApi, GemstoneAuthError, GemstoneError
+from .api import (
+    GemstoneApi,
+    GemstoneAuthError,
+    GemstoneError,
+    GemstoneRejectedError,
+    async_fetch_account,
+)
 from .bluetooth_api import GemstoneBluetoothApi
 from .const import (
-    CONF_AUTO_RECOVERY,
     CONF_BLUETOOTH_ADDRESS,
     CONF_EMAIL,
-    CONF_ENABLE_LIBRARY,
     CONF_ENABLE_LOCAL,
     CONF_HOST,
     CONF_HOST_DEVICE,
+    CONF_IMPORT,
     CONF_LOCAL_DEVICE,
     CONF_LOCAL_ONLY,
     CONF_PASSWORD,
-    CONF_PREFER_LOCAL,
-    CONF_RECOVERY_COOLDOWN,
-    CONF_RECOVERY_DELAY,
     DOMAIN,
 )
 from .local_api import GemstoneLocalApi, GemstoneLocalError
@@ -50,24 +51,14 @@ STEP_USER_SCHEMA = vol.Schema(
     }
 )
 
-
 OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional(CONF_LOCAL_ONLY, default=False): bool,
-        vol.Optional(CONF_AUTO_RECOVERY, default=False): bool,
-        vol.Optional(CONF_RECOVERY_DELAY, default=10): vol.All(
-            vol.Coerce(int), vol.Range(min=5, max=60)
-        ),
-        vol.Optional(CONF_RECOVERY_COOLDOWN, default=6): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=168)
-        ),
-        vol.Optional(CONF_PREFER_LOCAL, default=True): bool,
-        vol.Optional(CONF_ENABLE_LOCAL, default=False): bool,
-        vol.Optional(CONF_ENABLE_LIBRARY, default=True): bool,
         vol.Optional(CONF_HOST, default=""): str,
         vol.Optional(CONF_BLUETOOTH_ADDRESS, default=""): str,
     }
 )
+
+_HUB_KEYS = ("pixelCount", "outputNames", "rgbwSequence", "tcpEnabled", "localIp")
 
 
 def valid_host(host: str) -> bool:
@@ -92,10 +83,10 @@ def valid_host(host: str) -> bool:
 
 
 class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle setup, options and re-authentication."""
+    """Handle local, Bluetooth and one-time account-import setup."""
 
-    VERSION = 1
-    MINOR_VERSION = 2
+    VERSION = 2
+    MINOR_VERSION = 1
 
     @staticmethod
     @callback
@@ -105,24 +96,10 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialise the flow."""
-        self._reauth_email: str | None = None
-
-    async def _async_validate(self, email: str, password: str) -> str | None:
-        """Return an error key, or None when the credentials work."""
-        api = GemstoneApi(
-            self.hass, async_get_clientsession(self.hass), email, password
-        )
-        try:
-            await api.async_login()
-            await api.async_get_homegroups()
-        except GemstoneAuthError:
-            return "invalid_auth"
-        except GemstoneError:
-            return "cannot_connect"
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Unexpected error validating Gemstone credentials")
-            return "unknown"
-        return None
+        self._api: GemstoneApi | None = None
+        self._account: dict[str, Any] = {}
+        self._enable_local = False
+        self._device: dict[str, Any] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -285,70 +262,174 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_cloud(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Optionally import controllers and catalogs from an account."""
+        """Import a controller's setup and saved content from the account once."""
         errors: dict[str, str] = {}
-
         if user_input is not None:
-            email = user_input[CONF_EMAIL].strip()
-            await self.async_set_unique_id(email.lower())
-            self._abort_if_unique_id_configured()
-
-            error = await self._async_validate(email, user_input[CONF_PASSWORD])
-            if error:
-                errors["base"] = error
+            api = GemstoneApi(
+                self.hass,
+                async_get_clientsession(self.hass),
+                user_input[CONF_EMAIL].strip(),
+                user_input[CONF_PASSWORD],
+            )
+            try:
+                account = await async_fetch_account(api)
+            except GemstoneAuthError:
+                errors["base"] = "invalid_auth"
+            except GemstoneRejectedError as err:
+                _LOGGER.warning("Gemstone cloud rejected the import: %s", err)
+                errors["base"] = "cloud_rejected"
+            except GemstoneError:
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error importing from Gemstone")
+                errors["base"] = "unknown"
             else:
-                return self.async_create_entry(
-                    title=email,
-                    data={CONF_EMAIL: email, CONF_PASSWORD: user_input[CONF_PASSWORD]},
-                    options={
-                        CONF_ENABLE_LOCAL: user_input.get(CONF_ENABLE_LOCAL, False)
-                    },
-                )
+                configured = {
+                    entry.unique_id for entry in self._async_current_entries()
+                }
+                account["devices"] = [
+                    device
+                    for device in account["devices"]
+                    if device["id"] not in configured
+                ]
+                if not account["devices"]:
+                    return self.async_abort(reason="no_new_controllers")
+                self._api = api
+                self._account = account
+                self._enable_local = user_input.get(CONF_ENABLE_LOCAL, False)
+                if len(account["devices"]) == 1:
+                    return await self._async_import(account["devices"][0])
+                return await self.async_step_controller()
 
         return self.async_show_form(
             step_id="cloud", data_schema=STEP_USER_SCHEMA, errors=errors
         )
 
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
-    ) -> ConfigFlowResult:
-        """Start re-authentication after the stored password stops working."""
-        self._reauth_email = entry_data.get(CONF_EMAIL)
-        return await self.async_step_reauth_confirm()
-
-    async def async_step_reauth_confirm(
+    async def async_step_controller(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for a new password."""
-        errors: dict[str, str] = {}
-
+        """Pick which of the account's controllers to add."""
+        devices = {device["id"]: device for device in self._account["devices"]}
         if user_input is not None:
-            email = self._reauth_email or user_input.get(CONF_EMAIL, "")
-            error = await self._async_validate(email, user_input[CONF_PASSWORD])
-            if error:
-                errors["base"] = error
-            else:
-                entry = self._get_reauth_entry()
-                return self.async_update_reload_and_abort(
-                    entry,
-                    data={**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]},
-                )
-
+            return await self._async_import(devices[user_input[CONF_HOST_DEVICE]])
         return self.async_show_form(
-            step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
-            description_placeholders={"email": self._reauth_email or ""},
+            step_id="controller",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST_DEVICE): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                {
+                                    "value": device_id,
+                                    "label": d.get("name") or device_id,
+                                }
+                                for device_id, d in devices.items()
+                            ]
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def _async_import(self, device: dict[str, Any]) -> ConfigFlowResult:
+        """Prepare the chosen controller, then confirm its LAN address."""
+        await self.async_set_unique_id(device["id"])
+        self._abort_if_unique_id_configured()
+        self._device = device
+        hub = device.get("hub") or {}
+        if hub.get("tcpEnabled") is False and self._enable_local and self._api:
+            try:
+                await self._api.async_set_local_enabled(device["id"], True)
+            except GemstoneError as err:
+                _LOGGER.warning(
+                    "Gemstone %s: could not enable local commands (%s)",
+                    device["id"],
+                    err,
+                )
+            else:
+                hub["tcpEnabled"] = True
+        if host := hub.get("localIp"):
+            if await self._async_reachable(host):
+                return self._async_create_import(host)
+        return await self.async_step_import_host()
+
+    async def _async_reachable(self, host: str) -> bool:
+        client = GemstoneLocalApi(async_get_clientsession(self.hass), host)
+        try:
+            self._device["settings"] = await client.async_get_settings()
+            await client.async_get_state()
+        except GemstoneLocalError:
+            return False
+        return True
+
+    async def async_step_import_host(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for the address when the imported one cannot be reached."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip().lower()
+            if not valid_host(host):
+                errors[CONF_HOST] = "invalid_host"
+            elif await self._async_reachable(host):
+                return self._async_create_import(host)
+            else:
+                errors["base"] = "cannot_connect_local"
+        hub = self._device.get("hub") or {}
+        return self.async_show_form(
+            step_id="import_host",
             errors=errors,
+            description_placeholders={
+                "name": self._device.get("name") or self._device["id"]
+            },
+            data_schema=vol.Schema(
+                {vol.Required(CONF_HOST, default=hub.get("localIp") or ""): str}
+            ),
+        )
+
+    @callback
+    def _async_create_import(self, host: str) -> ConfigFlowResult:
+        """Create a local entry; the credentials are not kept."""
+        device = self._device
+        hub = device.get("hub") or {}
+        settings = device.get("settings") or {}
+        name = device.get("name") or f"Gemstone {host}"
+        self._api = None
+        return self.async_create_entry(
+            title=name,
+            data={
+                CONF_LOCAL_ONLY: True,
+                CONF_HOST: host,
+                CONF_LOCAL_DEVICE: {
+                    "id": device["id"],
+                    "name": name,
+                    "firmware": settings.get("firmware") or device.get("firmware"),
+                    "hub": {
+                        **{k: hub[k] for k in _HUB_KEYS if k in hub},
+                        **{
+                            k: settings[k]
+                            for k in ("pixelCount", "rgbwSequence")
+                            if k in settings
+                        },
+                        "localIp": host,
+                    },
+                },
+                CONF_IMPORT: {
+                    "zones": device.get("zones") or [],
+                    "designs": device.get("designs") or [],
+                    "patterns": self._account.get("patterns") or [],
+                },
+            },
         )
 
 
 class GemstoneOptionsFlow(OptionsFlow):
-    """Let the user tune local control."""
+    """Let the user change how the controller is reached."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage local-control options."""
+        """Manage the LAN address and Bluetooth override."""
         errors = {}
         coordinator = getattr(self.config_entry, "runtime_data", None)
         device_ids = coordinator.device_ids if coordinator else []
@@ -384,29 +465,6 @@ class GemstoneOptionsFlow(OptionsFlow):
                     selected = device_ids[0]
                 if not selected or selected not in device_ids:
                     errors[CONF_HOST_DEVICE] = "select_controller"
-            local_only = self.config_entry.data.get(
-                CONF_LOCAL_ONLY, False
-            ) or user_input.get(CONF_LOCAL_ONLY, False)
-            if (
-                local_only
-                and coordinator
-                and any(
-                    not (
-                        ((host or address) and selected == device_id)
-                        or coordinator.local_host(device_id)
-                        or (
-                            coordinator.bluetooth_address(device_id)
-                            if CONF_BLUETOOTH_ADDRESS not in user_input
-                            else None
-                        )
-                        or (
-                            coordinator.device_info_raw(device_id).get("hub") or {}
-                        ).get("localIp")
-                    )
-                    for device_id in device_ids
-                )
-            ):
-                errors["base"] = "missing_local_address"
             if errors:
                 return self.async_show_form(
                     step_id="init",
@@ -415,14 +473,6 @@ class GemstoneOptionsFlow(OptionsFlow):
                 )
             return self.async_create_entry(
                 data={
-                    CONF_LOCAL_ONLY: local_only,
-                    CONF_AUTO_RECOVERY: user_input.get(CONF_AUTO_RECOVERY, False),
-                    CONF_RECOVERY_DELAY: user_input.get(CONF_RECOVERY_DELAY, 10),
-                    CONF_RECOVERY_COOLDOWN: user_input.get(CONF_RECOVERY_COOLDOWN, 6),
-                    CONF_PREFER_LOCAL: local_only
-                    or user_input.get(CONF_PREFER_LOCAL, True),
-                    CONF_ENABLE_LOCAL: user_input.get(CONF_ENABLE_LOCAL, False),
-                    CONF_ENABLE_LIBRARY: user_input.get(CONF_ENABLE_LIBRARY, True),
                     CONF_HOST: host,
                     CONF_BLUETOOTH_ADDRESS: address,
                     CONF_HOST_DEVICE: selected,

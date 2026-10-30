@@ -13,7 +13,6 @@ red, green and blue ones.
 
 from __future__ import annotations
 
-import difflib
 from typing import Any
 
 from homeassistant.components.light import (
@@ -25,7 +24,6 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GemstoneConfigEntry
@@ -33,22 +31,6 @@ from .color_util import pack, unpack
 from .const import EFFECT_LIST, EFFECT_SOLID
 from .coordinator import GemstoneCoordinator
 from .entity import GemstoneEntity
-
-
-def _suggest(wanted: str, names: list[str]) -> str:
-    """Return a short "did you mean" hint for a name that was not found.
-
-    Substring matches come first because they are usually what was meant;
-    close spellings fill any remaining places, so typos are caught too.
-    """
-    needle = wanted.casefold()
-    hits = [name for name in names if needle in name.casefold()][:5]
-    if len(hits) < 5:
-        for name in difflib.get_close_matches(wanted, names, n=5, cutoff=0.6):
-            if name not in hits:
-                hits.append(name)
-    hits = hits[:5]
-    return f" Did you mean: {', '.join(hits)}?" if hits else ""
 
 
 async def async_setup_entry(
@@ -108,16 +90,6 @@ class _GemstoneBaseLight(GemstoneEntity, LightEntity):
         brightness = kwargs.get(ATTR_BRIGHTNESS) or self.brightness or 255
         effect = kwargs.get(ATTR_EFFECT) or self.effect or EFFECT_SOLID
         return tuple(rgbw), int(brightness), effect
-
-    def _library_data(self, pattern: str, folder: str | None) -> dict[str, Any]:
-        """Resolve a library name consistently for controller and zone actions."""
-        data = self.coordinator.find_library_pattern(pattern, folder)
-        if data is None:
-            raise HomeAssistantError(
-                f"No library pattern called '{pattern}'."
-                + _suggest(pattern, self.coordinator.library_pattern_names())
-            )
-        return data
 
 
 class GemstoneLight(_GemstoneBaseLight):
@@ -219,13 +191,6 @@ class GemstoneLight(_GemstoneBaseLight):
         """Turn the lights off."""
         await self.coordinator.async_set_power(self._device_id, False)
 
-    async def async_play_library_pattern(
-        self, pattern: str, folder: str | None = None
-    ) -> None:
-        """Play a pattern from Gemstone's official library by name."""
-        data = self._library_data(pattern, folder)
-        await self.coordinator.async_play_pattern(self._device_id, data)
-
 
 class GemstoneZoneLight(_GemstoneBaseLight):
     """One zone of the run, behaving like a WLED segment."""
@@ -240,7 +205,7 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def name(self) -> str | None:
-        """Return the zone's name as it is in the Gemstone app."""
+        """Return the zone's name."""
         for zone in self.coordinator.zones(self._device_id):
             if zone.get("id") == self._zone_id:
                 return zone.get("name")
@@ -248,7 +213,7 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def available(self) -> bool:
-        """Return False if the zone has been deleted in the app."""
+        """Return False if the zone has been deleted."""
         return super().available and any(
             zone.get("id") == self._zone_id
             for zone in self.coordinator.zones(self._device_id)
@@ -285,13 +250,8 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Note that animated zones need the cloud."""
-        return {
-            "control": "local"
-            if self.coordinator.is_local(self._device_id)
-            and self.effect in (EFFECT_SOLID, "motionless", None)
-            else "cloud"
-        }
+        """Expose the transport used for this zone's controller."""
+        return {"control": self.coordinator.control_transport(self._device_id)}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply a colour and effect to this zone only."""
@@ -312,11 +272,3 @@ class GemstoneZoneLight(_GemstoneBaseLight):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Clear this zone, leaving the others as they are."""
         await self.coordinator.async_set_zone(self._device_id, self._zone_id, None)
-
-    async def async_play_library_pattern(
-        self, pattern: str, folder: str | None = None
-    ) -> None:
-        """Play a complete library pattern in this zone only."""
-        await self.coordinator.async_play_zone_pattern(
-            self._device_id, self._zone_id, self._library_data(pattern, folder)
-        )

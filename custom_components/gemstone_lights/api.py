@@ -1,15 +1,12 @@
-"""Client for the Gemstone Lights cloud API.
+"""One-time import client for the Gemstone Lights cloud account.
 
-Authentication is AWS Cognito (user pool, SRP). Every request then carries a
-plain ``Authorization: Bearer <access token>`` header -- no AWS request signing
-is involved.
+The integration never uses the cloud at runtime. During setup only, it signs in
+with AWS Cognito (SRP), reads the account's controllers, zones, designs and
+saved patterns, and can switch on "Allow Local Commands" with consent. The
+credentials are discarded afterwards.
 
-Two details are easy to get wrong and are the reason this client exists:
-
-* Lighting control (write) calls use HTTP ``PUT``. Using ``POST`` returns a
-  confusing AWS SigV4 error that suggests the endpoint needs request signing.
-* Most endpoints expect ``deviceOrGroupId``; the architectural (per-zone)
-  endpoints expect ``deviceId``.
+Most endpoints expect ``deviceOrGroupId``; the architectural (per-zone)
+endpoints expect ``deviceId``. Write calls use HTTP ``PUT``.
 """
 
 from __future__ import annotations
@@ -35,7 +32,7 @@ from .const import (
     COGNITO_USER_POOL_ID,
     REQUEST_TIMEOUT,
 )
-from .validation import validate_design, validate_pattern, validate_state
+from .validation import validate_design, validate_pattern
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +50,14 @@ class GemstoneAuthError(GemstoneError):
 
 class GemstoneApiError(GemstoneError):
     """Raised when the API returns an unexpected response."""
+
+
+class GemstoneRejectedError(GemstoneApiError):
+    """Raised when the cloud refuses a request, e.g. an outdated app identity.
+
+    The cloud only answers clients that present the mobile app's headers
+    (``APP_HEADERS`` in const.py). Update those values when this persists.
+    """
 
 
 def _jwt_expiry(token: str) -> float:
@@ -109,28 +114,6 @@ class GemstoneApi:
             "id_token": user.id_token,
         }
 
-    def _refresh_sync(self) -> dict[str, str]:
-        """Renew the access token using the refresh token."""
-        from pycognito import Cognito  # noqa: PLC0415
-
-        user = Cognito(
-            COGNITO_USER_POOL_ID,
-            COGNITO_CLIENT_ID,
-            user_pool_region=AWS_REGION,
-            id_token=self._id_token,
-            access_token=self._access_token,
-            refresh_token=self._refresh_token,
-            botocore_config=Config(
-                connect_timeout=5, read_timeout=10, retries={"max_attempts": 1}
-            ),
-        )
-        user.renew_access_token()
-        return {
-            "access_token": user.access_token,
-            "refresh_token": user.refresh_token or self._refresh_token,
-            "id_token": user.id_token,
-        }
-
     def _store(self, tokens: dict[str, str]) -> None:
         self._access_token = tokens["access_token"]
         self._refresh_token = tokens.get("refresh_token")
@@ -162,33 +145,11 @@ class GemstoneApi:
         self._store(tokens)
         _LOGGER.debug("Gemstone login succeeded for %s", self._email)
 
-    async def _async_ensure_token(self, rejected_token: str | None = None) -> None:
-        """Make sure a usable access token is available."""
+    async def _async_ensure_token(self) -> None:
+        """Sign in once; an import session never outlives its access token."""
         async with self._lock:
-            if rejected_token is not None and self._access_token == rejected_token:
-                self._expires_at = 0.0
             if self._access_token and time.time() < self._expires_at - _TOKEN_LEEWAY:
                 return
-
-            if self._refresh_token:
-                try:
-                    tokens = await self._hass.async_add_executor_job(self._refresh_sync)
-                    self._store(tokens)
-                    return
-                except ClientError as err:
-                    if (
-                        err.response.get("Error", {}).get("Code")
-                        != "NotAuthorizedException"
-                    ):
-                        raise GemstoneApiError(
-                            "Could not renew the Gemstone session"
-                        ) from err
-                    _LOGGER.debug("Refresh token expired; signing in again")
-                except Exception as err:
-                    raise GemstoneApiError(
-                        "Could not renew the Gemstone session"
-                    ) from err
-
             await self.async_login()
 
     # -- transport ----------------------------------------------------------
@@ -200,7 +161,6 @@ class GemstoneApi:
         *,
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
-        _retry: bool = True,
     ) -> Any:
         """Send a request and return the decoded ``data`` payload."""
         await self._async_ensure_token()
@@ -220,18 +180,15 @@ class GemstoneApi:
             ) as resp:
                 text = await resp.text()
 
-                if resp.status in (401, 403) and _retry:
-                    # Token may have been revoked; force a fresh login once.
-                    _LOGGER.debug("Auth rejected on %s, retrying with new token", path)
-                    await self._async_ensure_token(rejected_token=access_token)
-                    return await self._request(
-                        method, path, params=params, json_body=json_body, _retry=False
+                if resp.status in (401, 403):
+                    raise GemstoneAuthError("Gemstone rejected the session")
+
+                if 400 <= resp.status < 500:
+                    raise GemstoneRejectedError(
+                        f"{method} {path} returned HTTP {resp.status}: {text[:200]}"
                     )
 
-                if resp.status in (401, 403):
-                    raise GemstoneAuthError("Gemstone rejected the renewed session")
-
-                if resp.status >= 400:
+                if resp.status >= 500:
                     raise GemstoneApiError(
                         f"{method} {path} returned HTTP {resp.status}: {text[:200]}"
                     )
@@ -249,13 +206,6 @@ class GemstoneApi:
 
                 data = body.get("data") if isinstance(body, dict) else body
                 if method == "GET":
-                    if path == "/deviceControl/currentlyPlaying":
-                        try:
-                            return validate_state(data)
-                        except ValueError as err:
-                            raise GemstoneApiError(
-                                f"{path} returned invalid state"
-                            ) from err
                     if not isinstance(data, list) or any(
                         not isinstance(item, dict) for item in data
                     ):
@@ -297,17 +247,6 @@ class GemstoneApi:
             or []
         )
 
-    async def async_get_state(self, device_id: str) -> dict[str, Any]:
-        """Return what the controller is currently playing."""
-        return (
-            await self._request(
-                "GET",
-                "/deviceControl/currentlyPlaying",
-                params={"deviceOrGroupId": device_id},
-            )
-            or {}
-        )
-
     async def async_get_zones(self, device_id: str) -> list[dict[str, Any]]:
         """Return the configured zones (e.g. Front Upper, Rear Lower)."""
         return (
@@ -343,33 +282,6 @@ class GemstoneApi:
 
     # -- write endpoints (always PUT) --------------------------------------
 
-    async def async_set_power(self, device_id: str, on: bool) -> None:
-        """Turn the lights on or off."""
-        await self._request(
-            "PUT",
-            "/deviceControl/onState",
-            params={"deviceOrGroupId": device_id},
-            json_body={"onState": on},
-        )
-
-    async def async_play_color(self, device_id: str, color: int) -> None:
-        """Show a single solid colour (little-endian packed RGBW)."""
-        await self._request(
-            "PUT",
-            "/deviceControl/play/color",
-            params={"deviceOrGroupId": device_id},
-            json_body={"color": color},
-        )
-
-    async def async_play_pattern(self, device_id: str, pattern: dict[str, Any]) -> None:
-        """Play a whole-controller pattern."""
-        await self._request(
-            "PUT",
-            "/deviceControl/play/pattern",
-            params={"deviceOrGroupId": device_id},
-            json_body={"pattern": pattern},
-        )
-
     async def async_get_library_folders(self) -> list[dict[str, Any]]:
         """Return Gemstone's official pattern folders."""
         return (
@@ -402,19 +314,6 @@ class GemstoneApi:
                 break
         return patterns
 
-    async def async_soft_reboot(self, device_id: str, homegroup_id: str) -> None:
-        """Request a soft reboot using the app's verified POST route.
-
-        An accepted request is not proof of controller recovery. Never replay
-        this non-idempotent request automatically, even after auth rejection.
-        """
-        await self._request(
-            "POST",
-            "/deviceControl/softReboot",
-            params={"deviceId": device_id, "homegroupId": homegroup_id},
-            _retry=False,
-        )
-
     async def async_set_local_enabled(self, device_id: str, enabled: bool) -> None:
         """Turn the controller's "Allow Local Commands" switch on or off.
 
@@ -428,12 +327,58 @@ class GemstoneApi:
             json_body={"tcpEnabled": enabled},
         )
 
-    async def async_play_design(self, device_id: str, design: dict[str, Any]) -> None:
-        """Play a saved architectural design (note: uses ``deviceId``)."""
-        payload = {**design, "preview": False}
-        await self._request(
-            "PUT",
-            "/deviceControl/play/architectural",
-            params={"deviceId": device_id},
-            json_body={"architectural": payload},
-        )
+
+async def async_fetch_account(api: GemstoneApi) -> dict[str, Any]:
+    """Read everything worth keeping locally in one pass.
+
+    Returns ``{"devices": [...], "patterns": [...]}``; each device carries its
+    own ``zones`` and ``designs``. Saved patterns belong to the account.
+    """
+    devices: list[dict[str, Any]] = []
+    for homegroup in await api.async_get_homegroups():
+        if not (homegroup_id := homegroup.get("id")):
+            continue
+        for device in await api.async_get_devices(homegroup_id):
+            if not (device_id := device.get("id")) or any(
+                known["id"] == device_id for known in devices
+            ):
+                continue
+            devices.append(
+                {
+                    **device,
+                    "zones": await api.async_get_zones(device_id),
+                    "designs": await api.async_get_designs(device_id),
+                }
+            )
+    patterns: list[dict[str, Any]] = []
+    for folder in await api.async_get_folders():
+        if not (folder_id := folder.get("folderId")):
+            continue
+        for item in await api.async_get_folder_patterns(folder_id):
+            data = item.get("patternData")
+            if isinstance(data, dict) and data.get("name"):
+                patterns.append(
+                    {
+                        "folder": folder.get("name") or "",
+                        "name": data["name"],
+                        "data": data,
+                    }
+                )
+    return {"devices": devices, "patterns": patterns}
+
+
+async def async_fetch_library(api: GemstoneApi) -> dict[str, Any]:
+    """Read Gemstone's official library, grouped by folder, for one download."""
+    folders = {
+        folder["id"]: folder
+        for folder in await api.async_get_library_folders()
+        if folder.get("id")
+    }
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in await api.async_get_library_patterns():
+        folder_id = item.get("downloadableFolderId")
+        data = item.get("patternData")
+        name = item.get("patternName")
+        if folder_id in folders and isinstance(data, dict) and name:
+            grouped.setdefault(folder_id, []).append({"name": name, "data": data})
+    return {"folders": folders, "patterns": grouped}

@@ -37,12 +37,20 @@ def http():
         yield mocked
 
 
+LOCAL_DEVICE = {
+    "id": "hub",
+    "name": "House",
+    "hub": {"localIp": "192.0.2.10", "tcpEnabled": True},
+}
+
+
 @pytest.fixture
 def entry(hass):
     result = MockConfigEntry(
         domain="gemstone_lights",
-        data={"email": "test@example.invalid", "password": "test-password"},
-        unique_id="test@example.invalid",
+        version=2,
+        data={"local_only": True, "host": "192.0.2.10", "local_device": LOCAL_DEVICE},
+        unique_id="hub",
     )
     result.add_to_hass(hass)
     return result
@@ -68,8 +76,9 @@ def vendor(http):
 
 
 @pytest.fixture
-async def coordinator(hass, entry, api, vendor):
-    result = GemstoneCoordinator(hass, entry, api, enable_library=False)
+async def coordinator(hass, entry, vendor):
+    result = GemstoneCoordinator(hass, entry, host_device_id="hub")
+    result._known_devices = [dict(LOCAL_DEVICE)]
     result._device_ids = ["hub"]
     result._zones = {
         "hub": [
@@ -110,39 +119,14 @@ def cognito_external(monkeypatch):
 
 
 @pytest.fixture
-async def loaded_entry(
-    hass, entry, vendor, hass_storage, enable_custom_integrations, cognito_external
-):
-    """Load real platforms from a prior successful discovery saved in HA storage."""
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
+async def loaded_entry(hass, entry, vendor, hass_storage, enable_custom_integrations):
+    """Load real platforms from a previously imported controller in HA storage."""
     key = f"gemstone_lights.{entry.entry_id}"
     hass_storage[key] = {
         "version": 1,
         "minor_version": 1,
         "key": key,
-        "data": {
-            "devices": vendor.devices,
-            "zones": vendor.zones,
-            "library": {
-                "folder": [
-                    {
-                        "name": "Holiday",
-                        "data": {
-                            "name": "Holiday",
-                            "colors": [255, 65280],
-                            "animation": "chase",
-                        },
-                    }
-                ]
-            },
-            "library_folders": {
-                "folder": {
-                    "id": "folder",
-                    "folderName": "Christmas",
-                    "category": "holidays",
-                }
-            },
-        },
+        "data": {"devices": vendor.devices, "zones": vendor.zones},
     }
     if not await hass.config_entries.async_setup(entry.entry_id):
         raise AssertionError("Integration setup failed")

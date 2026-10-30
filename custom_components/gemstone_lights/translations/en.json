@@ -5,32 +5,25 @@
         "title": "Gemstone Lights",
         "menu_options": {
           "local": "Local controller (no account or internet)",
-          "cloud": "Import from a Gemstone account",
+          "cloud": "Import once from a Gemstone account, then run locally",
           "bluetooth": "Bluetooth controller (no account or Wi-Fi)"
         }
       },
-      "reauth_confirm": {
-        "title": "Re-authenticate Gemstone Lights",
-        "description": "The password for {email} is no longer working. Enter it again.",
-        "data": {
-          "password": "Password"
-        }
-      },
       "cloud": {
-        "title": "Gemstone Lights",
-        "description": "Sign in with the same account you use in the Gemstone Lights app.",
+        "title": "Import from Gemstone account",
+        "description": "Sign in once to copy a controller's setup (light count, zones, colour order), designs and saved patterns into Home Assistant. Your password is not stored and the cloud is not used after setup.",
         "data": {
           "email": "Email",
           "password": "Password",
-          "enable_local": "Automatically enable Allow Local Commands"
+          "enable_local": "Switch on Allow Local Commands if it is off"
         },
         "data_description": {
-          "enable_local": "Opt in to let this integration enable Allow Local Commands on your account controllers, exposing unauthenticated HTTP control on your LAN. Leave unchecked to keep the controller setting unchanged and use cloud control when local commands are disabled. Controllers already enabled can still use LAN."
+          "enable_local": "Opt in to let this import turn on Allow Local Commands, which exposes unauthenticated HTTP control on your LAN. Without it, LAN control only works if the setting is already on in the Gemstone app."
         }
       },
       "local": {
         "title": "Local controller",
-        "description": "Enter the address of a Hub2 with Allow Local Commands already enabled. No Gemstone sign-in is used. Reserve its address in your router. Use the options on an existing account entry to keep its entities and cached content.",
+        "description": "Enter the address of a Hub2 with Allow Local Commands already enabled. No Gemstone sign-in is used. Reserve its address in your router.",
         "data": {
           "host": "Controller IP address or hostname",
           "name": "Name"
@@ -38,25 +31,40 @@
       },
       "bluetooth": {
         "title": "Bluetooth controller",
-        "description": "Enter a provisioned Hub2 Bluetooth address visible to a connectable Home Assistant adapter or proxy. Close the Gemstone app during setup. Firmware 1.1.5 is verified; password-protected firmware and new-device provisioning are not supported. For a controller already in this integration, change its options to preserve entities and content.",
+        "description": "Enter a provisioned Hub2 Bluetooth address visible to a connectable Home Assistant adapter or proxy. Close the Gemstone app during setup. Firmware 1.1.5 is verified; password-protected firmware and new-device provisioning are not supported. For a controller already in this integration, set its Bluetooth address in the options to keep its entities and content.",
         "data": {
           "bluetooth_address": "Controller Bluetooth address",
           "name": "Name (optional)"
+        }
+      },
+      "controller": {
+        "title": "Choose controller",
+        "description": "Pick the controller to add. Run the import again to add another.",
+        "data": {
+          "host_device_id": "Controller"
+        }
+      },
+      "import_host": {
+        "title": "Controller address",
+        "description": "{name} could not be reached at its imported address. Enter its LAN address and make sure Allow Local Commands is on.",
+        "data": {
+          "host": "Controller IP address or hostname"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
       "cannot_connect": "Could not reach the Gemstone cloud.",
-      "unknown": "Unexpected error. Check the Home Assistant log.",
       "invalid_host": "Enter an IPv4 address or hostname without a URL, port, or path.",
       "cannot_connect_local": "Could not read this controller over LAN. Check its address and enable Allow Local Commands in the Gemstone app.",
       "invalid_bluetooth_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF.",
-      "cannot_connect_bluetooth": "Could not read the controller over Bluetooth. Check its address, adapter range and available connection slots, and disconnect the Gemstone app. Password-protected firmware is not supported."
+      "cannot_connect_bluetooth": "Could not read the controller over Bluetooth. Check its address, adapter range and available connection slots, and disconnect the Gemstone app. Password-protected firmware is not supported.",
+      "cloud_rejected": "The Gemstone cloud refused the import. The app identity this integration presents may be outdated; check the log.",
+      "unknown": "Unexpected error. Check the Home Assistant log."
     },
     "abort": {
-      "already_configured": "This account or controller is already configured.",
-      "reauth_successful": "Re-authentication was successful."
+      "already_configured": "This controller is already configured.",
+      "no_new_controllers": "Every controller on this account is already configured."
     }
   },
   "entity": {
@@ -66,12 +74,6 @@
       },
       "pattern": {
         "name": "Pattern"
-      },
-      "library_folder": {
-        "name": "Library folder"
-      },
-      "library_pattern": {
-        "name": "Library pattern"
       }
     },
     "sensor": {
@@ -88,47 +90,22 @@
   "options": {
     "step": {
       "init": {
-        "title": "Local control",
-        "description": "Local-only mode keeps cached content and disables all Gemstone cloud access. Enter a Bluetooth address to use a connectable HA adapter or proxy for the selected controller; clear it to return to LAN. LAN requires Allow Local Commands. Bluetooth releases its connection after each operation.",
+        "title": "Controller connection",
+        "description": "Override the LAN address, or enter a Bluetooth address to use a connectable HA adapter or proxy instead of LAN; clear it to return to LAN. LAN requires Allow Local Commands. Bluetooth releases its connection after each operation.",
         "data": {
-          "prefer_local": "Use local control when available",
           "host": "Controller IP address (optional)",
-          "enable_local": "Automatically enable Allow Local Commands",
-          "enable_library": "Load Gemstone's official pattern library",
           "host_device_id": "Controller for address overrides",
-          "local_only": "Disable all Gemstone cloud access",
-          "bluetooth_address": "Bluetooth address (optional; replaces LAN for the selected controller)",
-          "auto_recovery": "Automatically soft reboot after persistent LAN failure (requires cloud)",
-          "recovery_delay_minutes": "LAN failure duration before recovery (minutes)",
-          "recovery_cooldown_hours": "Minimum time between automatic reboot attempts (hours)"
-        },
-        "data_description": {
-          "enable_local": "Opt in to let this integration enable Allow Local Commands on your account controllers, exposing unauthenticated HTTP control on your LAN. Leave unchecked to keep the controller setting unchanged and use cloud control when local commands are disabled. Controllers already enabled can still use LAN."
+          "bluetooth_address": "Bluetooth address (optional; replaces LAN for the selected controller)"
         }
       }
     },
     "error": {
       "invalid_host": "Enter an IPv4 address or hostname without a URL, port, or path.",
       "select_controller": "Select the controller this address belongs to.",
-      "missing_local_address": "Every controller needs a known LAN or configured Bluetooth address before cloud access can be disabled.",
       "invalid_bluetooth_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF."
     }
   },
   "services": {
-    "play_library_pattern": {
-      "name": "Play library pattern",
-      "description": "Play a pattern from Gemstone's official library by name.",
-      "fields": {
-        "pattern": {
-          "name": "Pattern",
-          "description": "The pattern's name."
-        },
-        "folder": {
-          "name": "Folder",
-          "description": "Optional library folder to search within."
-        }
-      }
-    },
     "save_content": {
       "name": "Save local content",
       "description": "Create or replace a pattern, design or zone in Home Assistant. Vendor catalogs are unchanged.",
@@ -143,7 +120,7 @@
         },
         "content": {
           "name": "Content",
-          "description": "Pattern/design object, or a zone object with inclusive start and end pixel indices (0\u20134095)."
+          "description": "Pattern/design object, or a zone object with inclusive start and end pixel indices (0–4095)."
         },
         "folder": {
           "name": "Folder",
@@ -222,26 +199,6 @@
         "content": {
           "name": "Content",
           "description": "The pattern or design object to play."
-        }
-      }
-    },
-    "soft_reboot": {
-      "name": "Soft reboot controller",
-      "description": "Request a cloud soft reboot to recover a failed local service. Requires cloud access; the controller may be unreachable for about one minute.",
-      "fields": {
-        "controller": {
-          "name": "Controller",
-          "description": "Select the whole-controller light, even if it is unavailable."
-        }
-      }
-    },
-    "rearm_recovery": {
-      "name": "Re-arm automatic recovery",
-      "description": "Allow another automatic recovery attempt after fresh LAN failures and the remaining cooldown. Automatic recovery must already be enabled. This action does not reboot the controller or change its settings.",
-      "fields": {
-        "controller": {
-          "name": "Controller",
-          "description": "Select the whole-controller light, even if it is unavailable."
         }
       }
     }

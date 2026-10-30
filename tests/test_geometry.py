@@ -11,11 +11,10 @@ from custom_components.gemstone_lights.light import GemstoneZoneLight
 
 
 async def local_layout(coordinator, vendor, lights, back=None):
-    """Supply external native geometry through real discovery and LAN polling."""
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
-    vendor.zones["hub"][0]["lights"] = lights
+    """Supply imported native geometry, then poll the controller over LAN."""
+    coordinator._zones["hub"][0]["lights"] = lights
     if back is not None:
-        vendor.zones["hub"][1]["lights"] = back
+        coordinator._zones["hub"][1]["lights"] = back
     vendor.states["hub"] = {"onState": False}
     coordinator.data = await coordinator._async_update_data()
 
@@ -131,7 +130,7 @@ async def test_matching_tail_does_not_hide_a_resized_native_zone(coordinator, ve
         await coordinator.async_play_zone_pattern(
             "hub", "front", {"colors": [255], "animation": "chase"}
         )
-    # Then complete geometry comparison blocks both local and cloud playback.
+    # Then complete geometry comparison blocks playback.
     assert vendor.writes == []
 
 
@@ -148,7 +147,7 @@ async def test_invalid_geometry_never_becomes_a_guessed_control_range(
         await coordinator.async_play_zone_pattern(
             "hub", "front", {"colors": [255], "animation": "motionless"}
         )
-    # Then no guessed interval is sent, even though cloud fallback is otherwise available.
+    # Then no guessed interval is sent.
     assert vendor.writes == []
 
 
@@ -192,7 +191,7 @@ async def test_export_import_preserves_gaps_and_design_references(
         {"zonePatterns": [{"zoneId": "front", "pattern": {"colors": [255]}}]},
     )
     exported = coordinator.catalog.export("hub")
-    fresh = GemstoneCoordinator(hass, entry, None)
+    fresh = GemstoneCoordinator(hass, entry)
     try:
         # When a new offline coordinator imports the portable catalog.
         await fresh.catalog.import_data("hub", exported)

@@ -5,14 +5,14 @@ async def test_ambiguous_legacy_override_cannot_redirect_other_controller(
     coordinator, vendor
 ):
     # Given two controllers and an old account-wide host override with no device selection.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
-    vendor.devices.append(
-        {
-            "id": "other",
-            "name": "Garage",
-            "hub": {"localIp": "192.0.2.11", "tcpEnabled": True},
-        }
-    )
+    garage = {
+        "id": "other",
+        "name": "Garage",
+        "hub": {"localIp": "192.0.2.11", "tcpEnabled": True},
+    }
+    vendor.devices.append(garage)
+    coordinator._known_devices.append(garage)
+    coordinator._host_device_id = None
     vendor.states["other"] = {"onState": True, "color": 65280}
     coordinator._host_override = "192.0.2.10"
     coordinator.data = await coordinator._async_update_data()

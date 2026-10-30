@@ -20,6 +20,6 @@ async def test_speed_only_replays_active_patterns(coordinator, vendor, on):
     await speed.async_set_native_value(100)
     # Then an active pattern changes speed only; an off controller receives no command.
     assert speed.native_value == 100
-    assert [write[3] for write in vendor.writes] == (
-        [{"pattern": {**pattern, "speed": 100}}] if on else []
+    assert [write[3]["pattern"] for write in vendor.writes] == (
+        [{**pattern, "speed": 100}] if on else []
     )

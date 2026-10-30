@@ -48,7 +48,6 @@ async def test_bluetooth_setup_and_light_control_need_no_lan_or_account(
     # Then HA exposes the normal light, emits the RGBW state over BLE, and makes no HTTP request.
     assert entry.data["local_only"] is True
     assert "email" not in entry.data and "host" not in entry.data
-    assert entry.runtime_data.api is None
     assert peripheral.state["colorB"] == {"value": 255, "brightness": 120}
     assert hass.states.get("light.bluetooth_house").attributes["control"] == "bluetooth"
     assert http.requests == {}
@@ -59,12 +58,12 @@ async def test_bluetooth_setup_and_light_control_need_no_lan_or_account(
 async def test_switching_existing_controller_to_bluetooth_preserves_entities_and_content(
     hass, entry, loaded_entry, peripheral, http, mock_bluetooth
 ):
-    # Given an existing account controller with cached zones and library content.
+    # Given an existing controller with imported zones.
     original_entities = set(hass.states.async_entity_ids("light"))
     flow = await hass.config_entries.options.async_init(entry.entry_id)
-    # When Bluetooth replaces the transport and cloud access is disabled.
+    # When Bluetooth replaces the LAN transport.
     result = await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"bluetooth_address": ADDRESS, "local_only": True}
+        flow["flow_id"], {"bluetooth_address": ADDRESS}
     )
     await hass.async_block_till_done()
     http.requests.clear()
@@ -72,10 +71,8 @@ async def test_switching_existing_controller_to_bluetooth_preserves_entities_and
     # Then identity and content survive while subsequent polling uses only Bluetooth.
     assert result["type"] == "create_entry"
     assert set(hass.states.async_entity_ids("light")) == original_entities
-    assert entry.runtime_data.library_size() == 1
     assert {z["id"] for z in entry.runtime_data.zones("hub")} == {"front", "back"}
     assert entry.runtime_data.control_transport("hub") == "bluetooth"
-    assert entry.runtime_data.api is None
     assert http.requests == {}
 
 
@@ -85,7 +82,7 @@ async def test_clearing_bluetooth_override_returns_existing_controller_to_lan(
     # Given an existing controller temporarily using Bluetooth through its options.
     flow = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"bluetooth_address": ADDRESS, "local_only": True}
+        flow["flow_id"], {"bluetooth_address": ADDRESS}
     )
     await hass.async_block_till_done()
     used_connections = len(peripheral.connections)
@@ -93,7 +90,7 @@ async def test_clearing_bluetooth_override_returns_existing_controller_to_lan(
     # When the Bluetooth address is cleared.
     flow = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"bluetooth_address": "", "local_only": True}
+        flow["flow_id"], {"bluetooth_address": ""}
     )
     await hass.async_block_till_done()
     # Then LAN polling resumes without another BLE connection or changed entity identity.
@@ -140,15 +137,15 @@ async def test_bluetooth_setup_rejects_unusable_state(
     assert peripheral.active == 0
 
 
-async def test_rejected_bluetooth_command_keeps_connection_available_without_cloud_replay(
+async def test_rejected_bluetooth_command_keeps_connection_available_without_replay(
     hass, entry, loaded_entry, peripheral, http
 ):
-    # Given a cloud-capable entry using Bluetooth whose controller rejects writes.
+    # Given an entry using Bluetooth whose controller rejects writes.
     from custom_components.gemstone_lights.api import GemstoneError
 
     flow = await hass.config_entries.options.async_init(entry.entry_id)
     await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"bluetooth_address": ADDRESS, "local_only": False}
+        flow["flow_id"], {"bluetooth_address": ADDRESS}
     )
     await hass.async_block_till_done()
     coordinator = entry.runtime_data
