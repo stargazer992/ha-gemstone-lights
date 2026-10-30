@@ -168,25 +168,10 @@ play_content:
     entity:
       integration: gemstone_lights
       domain: light
-
 soft_reboot:
   name: Soft reboot controller
-  description: Request a cloud soft reboot. Requires cloud access; the controller may
-    be unreachable for about one minute. A request is not proof of completed recovery.
-  fields:
-    controller:
-      name: Controller
-      required: true
-      selector:
-        entity:
-          integration: gemstone_lights
-          domain: light
-
-rearm_recovery:
-  name: Re-arm automatic recovery
-  description: Allow another automatic recovery attempt after fresh LAN failures
-    and the remaining cooldown. Automatic recovery must already be enabled.
-    This action does not reboot the controller or change its settings.
+  description: Request a cloud soft reboot. Requires the cloud access option; the
+    controller may be unreachable for about one minute.
   fields:
     controller:
       name: Controller

@@ -15,19 +15,14 @@ from homeassistant.helpers.storage import Store
 
 from .api import GemstoneApi
 from .const import (
-    CONF_AUTO_RECOVERY,
     CONF_BLUETOOTH_ADDRESS,
+    CONF_CLOUD_ACCESS,
     CONF_EMAIL,
-    CONF_ENABLE_LIBRARY,
-    CONF_ENABLE_LOCAL,
     CONF_HOST,
     CONF_HOST_DEVICE,
     CONF_LOCAL_DEVICE,
     CONF_LOCAL_ONLY,
     CONF_PASSWORD,
-    CONF_PREFER_LOCAL,
-    CONF_RECOVERY_COOLDOWN,
-    CONF_RECOVERY_DELAY,
     DOMAIN,
 )
 from .coordinator import GemstoneCoordinator
@@ -42,11 +37,13 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
 ]
 
+_RUNTIME_OPTIONS = (CONF_HOST, CONF_BLUETOOTH_ADDRESS, CONF_HOST_DEVICE)
+
 type GemstoneConfigEntry = ConfigEntry[GemstoneCoordinator]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register the library action even when no account is currently loaded."""
+    """Register actions even when no controller is currently loaded."""
     register_services(hass)
     service.async_register_platform_entity_service(
         hass,
@@ -60,52 +57,46 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> bool:
-    """Require explicit consent after the previous auto-enable default."""
-    if entry.version > 1:
+    """Turn cloud-era entries into local entries that keep their cached content."""
+    if entry.version > 2:
         return False
-    if entry.version == 1 and entry.minor_version < 2:
-        # Older options forms saved True by default, so that value cannot prove
-        # consent. Reset only this integration option, never the device setting.
+    if entry.version == 1:
+        # Credentials are no longer kept; cached controllers, zones, designs
+        # and saved patterns stay in storage and remain usable over LAN.
+        data = {
+            k: v for k, v in entry.data.items() if k not in (CONF_EMAIL, CONF_PASSWORD)
+        }
+        data[CONF_LOCAL_ONLY] = True
         hass.config_entries.async_update_entry(
             entry,
-            options={**entry.options, CONF_ENABLE_LOCAL: False},
-            minor_version=2,
+            data=data,
+            options={k: v for k, v in entry.options.items() if k in _RUNTIME_OPTIONS},
+            version=2,
+            minor_version=1,
         )
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> bool:
     """Set up Gemstone Lights from a config entry."""
-    local_only = entry.data.get(CONF_LOCAL_ONLY, False) or entry.options.get(
-        CONF_LOCAL_ONLY, False
-    )
-    api = (
-        None
-        if local_only
-        else GemstoneApi(
+    api = None
+    if entry.options.get(CONF_CLOUD_ACCESS) and CONF_PASSWORD in entry.options:
+        api = GemstoneApi(
             hass,
             async_get_clientsession(hass),
-            entry.data[CONF_EMAIL],
-            entry.data[CONF_PASSWORD],
+            entry.options[CONF_EMAIL],
+            entry.options[CONF_PASSWORD],
         )
-    )
-
     coordinator = GemstoneCoordinator(
         hass,
         entry,
-        api,
+        api=api,
         bluetooth_address=entry.options.get(
             CONF_BLUETOOTH_ADDRESS, entry.data.get(CONF_BLUETOOTH_ADDRESS)
         ),
         host_override=entry.options.get(CONF_HOST) or entry.data.get(CONF_HOST),
         host_device_id=entry.options.get(CONF_HOST_DEVICE)
         or (entry.data.get(CONF_LOCAL_DEVICE) or {}).get("id"),
-        prefer_local=entry.options.get(CONF_PREFER_LOCAL, True),
-        enable_local=entry.options.get(CONF_ENABLE_LOCAL, False),
-        enable_library=entry.options.get(CONF_ENABLE_LIBRARY, True),
-        auto_recovery=entry.options.get(CONF_AUTO_RECOVERY, False),
-        recovery_delay_minutes=entry.options.get(CONF_RECOVERY_DELAY, 10),
-        recovery_cooldown_hours=entry.options.get(CONF_RECOVERY_COOLDOWN, 6),
     )
     await coordinator.async_config_entry_first_refresh()
 
@@ -126,5 +117,5 @@ async def _async_reload_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> None:
-    """Remove persisted controller metadata when the account is removed."""
+    """Remove persisted controller data when the entry is removed."""
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}").async_remove()

@@ -15,7 +15,7 @@ def controller_entity(hass):
     )
 
 
-async def test_saved_pattern_survives_cloud_refresh_and_restart(
+async def test_saved_pattern_survives_refresh_and_restart(
     hass, entry, loaded_entry, vendor
 ):
     # Given a local two-color pattern saved through the public HA action.
@@ -31,8 +31,7 @@ async def test_saved_pattern_survives_cloud_refresh_and_restart(
         },
         blocking=True,
     )
-    # When a cloud catalog refresh occurs, the entry reloads, and the pattern is selected.
-    loaded_entry._catalog_refreshed = None
+    # When a poll runs, the entry reloads, and the pattern is selected.
     await loaded_entry.async_refresh()
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
@@ -55,7 +54,7 @@ async def test_saved_pattern_survives_cloud_refresh_and_restart(
 async def test_catalog_export_import_preserves_design_zone_references(
     hass, entry, loaded_entry
 ):
-    # Given a local design referencing an existing zone and a downloaded library.
+    # Given a local design referencing an existing zone.
     await loaded_entry.catalog.save(
         "hub",
         "design",
@@ -77,12 +76,11 @@ async def test_catalog_export_import_preserves_design_zone_references(
         return_response=True,
     )
     # When that export is imported into a fresh offline coordinator.
-    fresh = GemstoneCoordinator(hass, entry, None)
+    fresh = GemstoneCoordinator(hass, entry)
     await fresh.catalog.import_data("hub", exported)
-    # Then designs retain their zone references, zones keep geometry and library playback resolves offline.
+    # Then designs retain their zone references, zones keep geometry .
     assert fresh.designs("hub")[0]["zonePatterns"][0]["zoneId"] == "front"
     assert fresh.zone_ranges("hub") == {"front": (10, 12), "back": (13, 15)}
-    assert fresh.find_library_pattern("Holiday")["colors"] == [255, 65280]
     assert "devices" not in exported
     await fresh.async_shutdown()
 

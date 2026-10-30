@@ -75,7 +75,7 @@ def checked_content(kind: str, content: dict) -> dict:
 
 
 class LocalCatalog:
-    """Persist local edits separately so cloud refreshes cannot overwrite them."""
+    """Persist content created in Home Assistant separately from imported content."""
 
     def __init__(self, coordinator):
         self.coordinator = coordinator
@@ -84,8 +84,6 @@ class LocalCatalog:
             "patterns": [],
             "designs": {},
             "zones": {},
-            "library": {},
-            "library_folders": {},
         }
         self.lock = asyncio.Lock()
 
@@ -221,8 +219,6 @@ class LocalCatalog:
                 "patterns": self.coordinator.patterns(),
                 "designs": self.coordinator.designs(device_id),
                 "zones": zones,
-                "library": self.coordinator._library,
-                "library_folders": self.coordinator._library_folders,
             }
         )
 
@@ -236,8 +232,6 @@ class LocalCatalog:
             raise HomeAssistantError("Expected an exported version 1 or 2 catalog")
         async with self.lock:
             previous = deepcopy(self.data)
-            library = deepcopy(catalog.get("library", {}))
-            folders = deepcopy(catalog.get("library_folders", {}))
             try:
                 for key in ("zones", "patterns", "designs"):
                     items = catalog.get(key, [])
@@ -282,19 +276,6 @@ class LocalCatalog:
                             saved = saved["data"]
                         if isinstance(item.get("id"), str):
                             saved["id"] = item["id"]
-                if not isinstance(library, dict) or not isinstance(folders, dict):
-                    raise ValueError("Invalid library")
-                for folder_id, items in library.items():
-                    if not isinstance(items, list) or any(
-                        not isinstance(item, dict) for item in items
-                    ):
-                        raise ValueError("Invalid library patterns")
-                    if not isinstance(folders.get(folder_id), dict):
-                        raise ValueError("Missing library folder")
-                    for item in items:
-                        if not isinstance(item.get("name"), str):
-                            raise ValueError("Missing library pattern name")
-                        checked_content("pattern", item["data"])
             except (
                 KeyError,
                 IndexError,
@@ -304,9 +285,5 @@ class LocalCatalog:
             ) as err:
                 self.data = previous
                 raise HomeAssistantError(f"Invalid catalog: {err}") from err
-            self.data["library"].update(library)
-            self.data["library_folders"].update(folders)
-            self.coordinator._library.update(library)
-            self.coordinator._library_folders.update(folders)
             await self.coordinator._async_save_cache()
             self.coordinator.async_update_listeners()

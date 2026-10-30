@@ -3,8 +3,8 @@
 Investigation date: 2026-09-06. Software baseline: Home Assistant 2026.9.1;
 hardware tested: Gemstone Hub2 firmware 1.1.5.
 
-This integration can run without a Gemstone account and can explicitly disable
-all Gemstone cloud requests. **That is not complete parity with every function
+This integration never makes Gemstone cloud requests at runtime; an account is
+only used, optionally, for a one-time import during setup. **That is not complete parity with every function
 in the vendor app.** The table below distinguishes implemented offline workflows
 from unresolved controller features.
 
@@ -48,11 +48,10 @@ integrations. A working local clock matters for schedules after a power outage.
 4. Reserve the controller's address in the router. Use the integration options
    to change the address later; the existing entity identities stay unchanged.
 
-To preserve existing entity IDs and downloaded content, use **Configure → Disable
-all Gemstone cloud access** on the existing account entry. It retains cached
-controllers, zones, designs, library content and logical brightness state. Cloud
-credentials in that existing entry are not used while the option is enabled.
-Do not delete and re-add the entry to switch modes.
+Account entries from earlier versions are converted on upgrade: credentials are
+removed, entity IDs and cached controllers, zones, designs and saved patterns
+are kept, and a cached library is moved to `www/gemstones`. Do not delete and
+re-add the entry.
 
 An offline HA installation also needs the integration's Python dependencies
 already installed or supplied offline. Initial HACS installation, dependency
@@ -63,8 +62,7 @@ identities and native-zone metadata.
 ## Optional Bluetooth transport
 
 For an existing controller, open **Configure**, select the controller for address
-overrides, and enter its Bluetooth MAC address. Enable **Disable all Gemstone
-cloud access** for strict offline operation. Existing entities, zones and cached
+overrides, and enter its Bluetooth MAC address. Existing entities, zones and cached
 content remain intact. Clear the Bluetooth address to return to LAN; LAN still
 requires **Allow Local Commands** and a reachable address.
 
@@ -142,9 +140,9 @@ Custom content receives generated identity fields and default brightness, speed,
 direction and background values when omitted. Direction values 0–5 are accepted,
 matching the patterns observed in the vendor catalog.
 
-Local edits and imported libraries are stored separately from vendor catalogs,
-so a subsequent cloud refresh cannot erase them. Local data is included in HA's
-`.storage/gemstone_lights.<entry_id>` backup. Do not edit that storage manually.
+Local edits are stored separately from imported content. Both are included in
+HA's `.storage/gemstone_lights.<entry_id>` backup; the library is in
+`www/gemstones`. Do not edit that storage manually.
 
 ## Playlists and schedules
 

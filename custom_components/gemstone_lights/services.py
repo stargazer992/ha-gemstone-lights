@@ -1,4 +1,4 @@
-"""Local editing, backups, playback and controller recovery actions."""
+"""Local editing, backups and playback actions."""
 
 from __future__ import annotations
 
@@ -32,10 +32,6 @@ def register_services(hass):
     async def reboot(call):
         coordinator, device_id = controller(call)
         await coordinator.async_soft_reboot(device_id)
-
-    async def rearm(call):
-        coordinator, device_id = controller(call)
-        await coordinator.async_rearm_recovery(device_id)
 
     async def save(call):
         coordinator, device_id = controller(call)
@@ -85,7 +81,6 @@ def register_services(hass):
     common = {vol.Required("controller"): cv.entity_id}
     for name, handler, fields, response in (
         ("soft_reboot", reboot, {}, SupportsResponse.NONE),
-        ("rearm_recovery", rearm, {}, SupportsResponse.NONE),
         (
             "save_content",
             save,

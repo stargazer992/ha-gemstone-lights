@@ -34,20 +34,11 @@ async def test_editing_front_preserves_complete_back_pattern(coordinator, vendor
     await coordinator.async_set_zone(
         "hub", "front", {"color": 16711680, "brightness": 200, "animation": "Solid"}
     )
-    # Then its palette is physically dimmed without losing metadata or changing the logical input.
+    # Then the back zone is resent unchanged, metadata included, over LAN.
     sent = vendor.writes[-1][3]["architectural"]["zonePatterns"]
-    assert next(e for e in sent if e["zoneId"] == "back") == {
-        **original,
-        "pattern": {
-            **original["pattern"],
-            "colors": [80, 20480],
-            "backgroundColor": 1342177280,
-            "brightness": 255,
-        },
-    }
-    assert next(e for e in sent if e["zoneId"] == "front")["pattern"]["colors"] == [
-        13107200
-    ]
+    assert next(e for e in sent if e["zoneId"] == "back") == original
+    front = next(e for e in sent if e["zoneId"] == "front")["pattern"]
+    assert (front["colors"], front["brightness"]) == ([16711680], 200)
     assert back == original
 
 
@@ -68,9 +59,9 @@ async def test_dimming_a_zone_keeps_its_palette_and_animation_settings(
     light = GemstoneZoneLight(coordinator, "hub", "front")
     # When only its brightness changes through the light entity.
     await light.async_turn_on(brightness=80)
-    # Then the emitted palette encodes dimming and the logical palette and animation survive.
+    # Then only the zone's brightness changes; palette and animation survive.
     sent = vendor.writes[-1][3]["architectural"]["zonePatterns"][0]["pattern"]
-    assert sent == {**pattern, "colors": [80, 20480], "brightness": 255}
+    assert sent == {**pattern, "brightness": 80}
     assert coordinator.device_state("hub")["architectural"]["zonePatterns"][0][
         "pattern"
     ] == {**pattern, "brightness": 80}
@@ -94,7 +85,7 @@ async def test_turning_off_front_of_whole_run_preserves_back(coordinator, vendor
     assert sent == [
         {
             "zoneId": "back",
-            "pattern": {**pattern, "colors": [200, 51200], "brightness": 255},
+            "pattern": pattern,
         }
     ]
     assert back.is_on
@@ -103,7 +94,6 @@ async def test_turning_off_front_of_whole_run_preserves_back(coordinator, vendor
 
 async def test_three_explicit_pixels_cover_the_entire_zone(coordinator, vendor):
     # Given the local API reports exactly three explicit blue pixel indices.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     vendor.states["hub"] = {
         "onState": True,
         "architectural": {
@@ -134,7 +124,6 @@ async def test_endpoints_alone_do_not_imply_uniform_zone_coverage(coordinator):
 
 async def test_local_zones_keep_independent_brightness_after_echo(coordinator, vendor):
     # Given a local layout with red front at 80 and white back at 200.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     coordinator.data = await coordinator._async_update_data()
     coordinator.data["devices"]["hub"]["state"] = {
         "onState": True,

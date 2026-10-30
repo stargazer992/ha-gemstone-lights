@@ -7,14 +7,15 @@ from typing import Final
 
 DOMAIN: Final = "gemstone_lights"
 
-# --- Gemstone cloud (AWS) --------------------------------------------------
+# --- Gemstone cloud (AWS), used only for the one-time account import --------
 # These identifiers are embedded in the official Gemstone Lights mobile app.
 AWS_REGION: Final = "us-west-2"
 COGNITO_USER_POOL_ID: Final = "us-west-2_rr5lY7Etr"
 COGNITO_CLIENT_ID: Final = "2647t144niotrl53vvru0ivno7"
 API_BASE_URL: Final = "https://mytpybpq12.execute-api.us-west-2.amazonaws.com/prod"
 
-# The API rejects requests that do not look like the mobile app.
+# The API rejects requests that do not look like the mobile app. If imports
+# start failing with HTTP 4xx, update these to the current app release.
 APP_HEADERS: Final = {
     "app-environment": "Production",
     "app-platform": "Android",
@@ -30,12 +31,12 @@ CONF_LOCAL_ONLY: Final = "local_only"
 CONF_LOCAL_DEVICE: Final = "local_device"
 CONF_EMAIL: Final = "email"
 CONF_PASSWORD: Final = "password"
+# Account content handed from the config flow to the first setup, then removed.
+CONF_IMPORT: Final = "import"
+# Opt-in: keep credentials and fall back to the cloud when the LAN fails.
+CONF_CLOUD_ACCESS: Final = "cloud_access"
 
 DEFAULT_SCAN_INTERVAL: Final = timedelta(seconds=30)
-# Saved designs/patterns change rarely; refresh them far less often.
-CATALOG_REFRESH_INTERVAL: Final = timedelta(minutes=15)
-# Gemstone's official library is large and barely changes.
-LIBRARY_REFRESH_INTERVAL: Final = timedelta(hours=24)
 
 REQUEST_TIMEOUT: Final = 30
 
@@ -53,6 +54,7 @@ OPTION_NONE: Final = "None"
 
 # Shown in the library folder select before a folder is chosen.
 OPTION_PICK_FOLDER: Final = "Pick a folder"
+
 
 # --- Effects ---------------------------------------------------------------
 # Animation identifiers understood by the controller. These ship with the
@@ -101,21 +103,12 @@ DATA_ZONES: Final = "zones"
 # Commands" is enabled in the Gemstone app.
 CONF_HOST: Final = "host"
 CONF_HOST_DEVICE: Final = "host_device_id"
-CONF_PREFER_LOCAL: Final = "prefer_local"
 CONF_ENABLE_LOCAL: Final = "enable_local"
-CONF_ENABLE_LIBRARY: Final = "enable_library"
 LOCAL_TIMEOUT: Final = 8
 LOCAL_MAX_PAYLOAD: Final = 15 * 1024
 # The vendor drivers tag their writes; the controller echoes this back.
 LOCAL_ORIGIN: Final = "control4"
 # The controller ignores writes that arrive back to back.
 LOCAL_WRITE_GAP: Final = 1.5
-# How long to stay on the cloud after the controller cannot be reached.
-LOCAL_RETRY_BACKOFF: Final = timedelta(minutes=5)
 DATA_LOCAL: Final = "local"
 DATA_SETTINGS: Final = "settings"
-
-# Cloud-assisted LAN recovery is explicitly opt-in.
-CONF_AUTO_RECOVERY: Final = "auto_recovery"
-CONF_RECOVERY_DELAY: Final = "recovery_delay_minutes"
-CONF_RECOVERY_COOLDOWN: Final = "recovery_cooldown_hours"

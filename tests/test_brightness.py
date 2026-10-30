@@ -1,20 +1,23 @@
-"""Cloud brightness must operate on logical RGBW, not already-dimmed channels."""
+"""Brightness must operate on logical RGBW, not already-dimmed channels."""
 
 import asyncio
 
 from custom_components.gemstone_lights.light import GemstoneLight, GemstoneZoneLight
 
 
-async def test_dim_then_brighten_restores_original_cloud_color(coordinator, vendor):
-    # Given a full red controller in cloud-only mode.
+async def test_dim_then_brighten_restores_original_color(coordinator, vendor):
+    # Given a full red controller.
     light = GemstoneLight(coordinator, "hub")
     # When it is dimmed, its physical echo is polled, and then brightness is restored.
     await light.async_turn_on(brightness=80)
     await asyncio.sleep(5.05)  # Let the real command-settling window expire.
     coordinator.data = await coordinator._async_update_data()
     await light.async_turn_on(brightness=255)
-    # Then the first cloud write is scaled red and the second restores the full original channel.
-    assert [write[3] for write in vendor.writes] == [{"color": 80}, {"color": 255}]
+    # Then red is kept at full scale and only the separate brightness changes.
+    assert [write[3]["colorB"] for write in vendor.writes] == [
+        {"value": 255, "brightness": 80},
+        {"value": 255, "brightness": 255},
+    ]
     assert light.rgbw_color == (255, 0, 0, 0)
     assert light.brightness == 255
 
@@ -22,8 +25,7 @@ async def test_dim_then_brighten_restores_original_cloud_color(coordinator, vend
 async def test_dimming_whole_solid_design_preserves_zone_ratios_offline(
     coordinator, vendor
 ):
-    # Given a local design with front at 80 and back at 200 before the cloud goes offline.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
+    # Given a local design with front at 80 and back at 200.
     coordinator.data = await coordinator._async_update_data()
     await coordinator.async_play_design(
         "hub",
@@ -49,7 +51,6 @@ async def test_dimming_whole_solid_design_preserves_zone_ratios_offline(
             ],
         },
     )
-    vendor.cloud_offline = True
     # When the whole-controller light is dimmed to approximately half brightness.
     await GemstoneLight(coordinator, "hub").async_turn_on(brightness=128)
     # Then the operation stays local and retains the zones' relative brightness.
@@ -81,7 +82,6 @@ async def test_power_change_retains_local_zone_brightness_interpretation(
     coordinator, vendor
 ):
     # Given a local solid zone whose physical color encodes its brightness.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     coordinator.data = await coordinator._async_update_data()
     await coordinator.async_play_design(
         "hub",

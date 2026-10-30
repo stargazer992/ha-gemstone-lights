@@ -240,7 +240,7 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def name(self) -> str | None:
-        """Return the zone's name as it is in the Gemstone app."""
+        """Return the zone's name."""
         for zone in self.coordinator.zones(self._device_id):
             if zone.get("id") == self._zone_id:
                 return zone.get("name")
@@ -248,7 +248,7 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def available(self) -> bool:
-        """Return False if the zone has been deleted in the app."""
+        """Return False if the zone has been deleted."""
         return super().available and any(
             zone.get("id") == self._zone_id
             for zone in self.coordinator.zones(self._device_id)
@@ -285,13 +285,8 @@ class GemstoneZoneLight(_GemstoneBaseLight):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Note that animated zones need the cloud."""
-        return {
-            "control": "local"
-            if self.coordinator.is_local(self._device_id)
-            and self.effect in (EFFECT_SOLID, "motionless", None)
-            else "cloud"
-        }
+        """Expose the transport used for this zone's controller."""
+        return {"control": self.coordinator.control_transport(self._device_id)}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Apply a colour and effect to this zone only."""

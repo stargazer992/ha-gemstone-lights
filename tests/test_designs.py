@@ -3,7 +3,6 @@
 
 async def test_existing_animated_zone_uses_verified_local_firmware(coordinator, vendor):
     # Given a reachable Hub2 1.1.5 and an existing animated zone with its own level.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     coordinator.data = await coordinator._async_update_data()
     design = {
         "id": "saved",
@@ -29,7 +28,6 @@ async def test_existing_animated_zone_uses_verified_local_firmware(coordinator, 
 
 async def test_static_pixel_design_uses_local_transport(coordinator, vendor):
     # Given a reachable local controller and a supported explicit-pixel design.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     coordinator.data = await coordinator._async_update_data()
     design = {
         "staticColors": [{"lights": [10, 11, 12], "color": 255}],
@@ -62,7 +60,7 @@ async def test_new_animated_zone_is_rejected_before_any_transport(coordinator, v
                 ]
             },
         )
-    # Then neither LAN nor cloud receives a design that cannot render the requested range.
+    # Then the controller never receives a design that cannot render the requested range.
     assert vendor.writes == []
 
 
@@ -70,7 +68,6 @@ async def test_local_static_zone_repeats_palette_and_scales_each_channel(
     coordinator, vendor
 ):
     # Given a three-pixel zone and a two-color static palette at half master brightness.
-    vendor.devices[0]["hub"] = {"localIp": "192.0.2.10", "tcpEnabled": True}
     coordinator.data = await coordinator._async_update_data()
     # When the palette is played in the front zone.
     await coordinator.async_play_design(

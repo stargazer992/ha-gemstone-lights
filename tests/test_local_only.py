@@ -24,9 +24,6 @@ async def test_local_setup_needs_no_account_or_cloud(
     await hass.async_block_till_done()
     entry = result["result"]
     coordinator = entry.runtime_data
-    coordinator._discovery_next = None
-    coordinator._catalog_refreshed = None
-    coordinator._library_refreshed = None
     await coordinator.async_refresh()
     await coordinator.async_play_color("local:192.0.2.10", 65280, 80)
     # Then physical commands use LAN and no authentication/discovery/catalog URL is contacted.
@@ -52,14 +49,16 @@ async def test_local_failure_reports_unavailable_then_recovers_without_cloud(
         },
     )
     entry.add_to_hass(hass)
-    coordinator = GemstoneCoordinator(hass, entry, None)
+    coordinator = GemstoneCoordinator(hass, entry)
     await coordinator._async_setup()
     await coordinator.async_refresh()
     vendor.failures["/device-state/currently-playing"] = 503
     # When a poll fails and a command is attempted during the outage.
     await coordinator.async_refresh()
-    with pytest.raises(HomeAssistantError, match="cloud access is disabled"):
+    vendor.failures["/device-control/play"] = 503
+    with pytest.raises(HomeAssistantError, match="did not accept"):
         await coordinator.async_set_power("hub", False)
+    vendor.failures.pop("/device-control/play")
     # Then the entity is unavailable, no cloud is contacted, and the next successful poll recovers.
     assert not coordinator.device_available("hub")
     vendor.failures.clear()
@@ -70,30 +69,64 @@ async def test_local_failure_reports_unavailable_then_recovers_without_cloud(
     await coordinator.async_shutdown()
 
 
-async def test_existing_account_can_disable_cloud_without_losing_entities(
-    hass, entry, loaded_entry, http
+async def test_cloud_era_account_entry_migrates_to_local_with_cached_content(
+    hass, vendor, http, hass_storage, config_dir, enable_custom_integrations
 ):
-    # Given an account entry with previously cached zones and library patterns.
-    old_ids = set(hass.states.async_entity_ids("light"))
-    # When cloud access is disabled in options and HA reloads the integration.
-    flow = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        flow["flow_id"], {"local_only": True}
+    # Given a version 1 account entry with credentials and an upstream-format cache.
+    entry = MockConfigEntry(
+        domain="gemstone_lights",
+        version=1,
+        minor_version=2,
+        data={"email": "test@example.invalid", "password": "test-password"},
+        options={"auto_recovery": True, "enable_library": True, "host": "192.0.2.10"},
+        unique_id="test@example.invalid",
     )
+    entry.add_to_hass(hass)
+    key = f"gemstone_lights.{entry.entry_id}"
+    hass_storage[key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": key,
+        "data": {
+            "devices": vendor.devices,
+            "zones": vendor.zones,
+            "patterns": [
+                {"folder": "Mine", "name": "Glamo WW", "data": {"colors": [255]}}
+            ],
+            "library": {"folder": [{"name": "Holiday", "data": {"colors": [255]}}]},
+            "library_folders": {
+                "folder": {
+                    "id": "folder",
+                    "folderName": "Christmas",
+                    "category": "holidays",
+                }
+            },
+            "speeds": {"hub": 42},
+            "state_aliases": {"hub": {"logical": {}, "wire": {}}},
+        },
+    }
+    # When Home Assistant loads it.
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     coordinator = entry.runtime_data
-    http.requests.clear()
-    coordinator._discovery_next = None
-    coordinator._catalog_refreshed = None
-    coordinator._library_refreshed = None
-    await coordinator.async_refresh()
-    # Then identities and offline content survive and expired catalogs cause no cloud traffic.
-    assert result["type"] == "create_entry"
-    assert coordinator.api is None
-    assert set(hass.states.async_entity_ids("light")) == old_ids
-    assert coordinator.library_size() == 1
+    # Then credentials and cloud-only options are gone, content survives, and only LAN is used.
+    assert entry.version == 2
+    assert "password" not in entry.data and "email" not in entry.data
+    assert entry.options == {"host": "192.0.2.10"}
     assert {zone["id"] for zone in coordinator.zones("hub")} == {"front", "back"}
+    assert [p["name"] for p in coordinator.patterns()] == ["Glamo WW"]
+    assert coordinator.find_library_pattern("Holiday") is not None
+    assert (config_dir / "www" / "gemstones" / "index.json").exists()
+    assert set(hass_storage[key]["data"]) == {
+        "devices",
+        "local_catalog",
+        "zones",
+        "designs",
+        "patterns",
+    }
+    assert coordinator.device_available("hub")
     assert {url.host for _, url in http.requests} == {"192.0.2.10"}
+    await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_local_setup_rejects_urls_before_network_io(

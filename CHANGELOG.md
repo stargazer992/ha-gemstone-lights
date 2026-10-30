@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.0.0
+
+- Never use the Gemstone cloud at runtime. The account is used once during
+  setup to import one controller's setup, native zones, designs and saved
+  patterns, optionally switch on Allow Local Commands, and download the
+  official library to `www/gemstones`. Credentials are not stored.
+- Remove cloud discovery, catalog refresh, cloud fallback, cloud soft reboot,
+  automatic recovery and reauthentication.
+- Convert earlier account entries to local entries on upgrade, keeping cached
+  content and moving a cached library to `www/gemstones`.
+- Store only the controller setup and saved content; commands and polls no
+  longer write to disk.
+- Poll controllers in parallel without holding the command lock during network
+  reads, and always send commands to the controller, even after a failed poll.
+- List patterns with the same name as `Name (Folder)` and play the exact one
+  chosen.
+- Add redacted diagnostics.
+- Add **Re-import from Gemstone account** to the options to refresh imported
+  content and the library without keeping the password.
+- Add an opt-in **Cloud access** option (off by default) that stores credentials
+  for cloud fallback when the LAN fails and for the `soft_reboot` action;
+  turning it off deletes them.
+- Choosing None in the design, pattern or library pattern select no longer
+  turns the lights off.
+
 ## 1.8.1 — 2026-10-21
 
 - Require an explicit, unchecked-by-default opt-in before account mode enables
