@@ -103,9 +103,8 @@ class _GemstoneContentSelect(GemstoneEntity, SelectEntity):
         raise NotImplementedError
 
     async def async_select_option(self, option: str) -> None:
-        """Play the chosen content; None turns the lights off."""
+        """Play the chosen content; None only reflects that nothing matches."""
         if option == OPTION_NONE:
-            await self.coordinator.async_set_power(self._device_id, False)
             return
         for label, content in self._choices():
             if label == option:
@@ -235,9 +234,8 @@ class GemstoneLibraryPatternSelect(GemstoneEntity, SelectEntity):
         return playing if playing in self.options else OPTION_NONE
 
     async def async_select_option(self, option: str) -> None:
-        """Play the chosen library pattern."""
+        """Play the chosen library pattern; None changes nothing."""
         if option == OPTION_NONE:
-            await self.coordinator.async_set_power(self._device_id, False)
             return
 
         folder = self.coordinator.selected_folder(self._device_id)

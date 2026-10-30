@@ -11,7 +11,11 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.gemstone_lights.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from custom_components.gemstone_lights.select import GemstonePatternSelect
+from custom_components.gemstone_lights.select import (
+    GemstoneDesignSelect,
+    GemstoneLibraryPatternSelect,
+    GemstonePatternSelect,
+)
 
 COMPONENT = Path(__file__).parent.parent / "custom_components" / "gemstone_lights"
 
@@ -156,3 +160,21 @@ async def test_library_action_targets_only_the_selected_zone(
     }
     assert entries["front"]["colors"] == [255, 65280]
     assert entries["back"]["colors"] == [255]
+
+
+async def test_choosing_none_never_turns_the_lights_off(coordinator, vendor):
+    # Given lights that are on.
+    selects = [
+        cls(coordinator, "hub")
+        for cls in (
+            GemstoneDesignSelect,
+            GemstonePatternSelect,
+            GemstoneLibraryPatternSelect,
+        )
+    ]
+    # When an automation resets each dropdown to None.
+    for select in selects:
+        await select.async_select_option("None")
+    # Then nothing is sent and the lights stay on.
+    assert vendor.writes == []
+    assert coordinator.device_state("hub")["onState"]

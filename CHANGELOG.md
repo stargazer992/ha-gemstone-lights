@@ -17,6 +17,8 @@
 - List patterns with the same name as `Name (Folder)` and play the exact one
   chosen.
 - Add redacted diagnostics.
+- Choosing None in the design, pattern or library pattern select no longer
+  turns the lights off.
 
 ## 1.8.1 — 2026-10-21
 

@@ -185,6 +185,8 @@ Unknown pattern names produce an error with suggested matches.
 - **Animated zones** need zones imported from the controller with unchanged
   pixels; verified on firmware 1.1.5. New or resized HA zones support
   motionless palettes only.
+- **Choosing None in a dropdown changes nothing**; it only shows that nothing
+  saved is playing. Turn the lights off with the light entity.
 - **Changing speed while off leaves the lights off.** It stores the speed for
   future effects; running patterns are updated immediately.
 - **Music mode and native controller playlist management** remain unimplemented.
