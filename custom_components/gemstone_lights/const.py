@@ -33,6 +33,8 @@ CONF_EMAIL: Final = "email"
 CONF_PASSWORD: Final = "password"
 # Account content handed from the config flow to the first setup, then removed.
 CONF_IMPORT: Final = "import"
+# Opt-in: keep credentials and fall back to the cloud when the LAN fails.
+CONF_CLOUD_ACCESS: Final = "cloud_access"
 
 DEFAULT_SCAN_INTERVAL: Final = timedelta(seconds=30)
 

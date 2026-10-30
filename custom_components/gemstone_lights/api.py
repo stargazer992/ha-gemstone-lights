@@ -1,9 +1,9 @@
-"""One-time import client for the Gemstone Lights cloud account.
+"""Client for the Gemstone Lights cloud account.
 
-The integration never uses the cloud at runtime. During setup only, it signs in
-with AWS Cognito (SRP), reads the account's controllers, zones, designs and
-saved patterns, and can switch on "Allow Local Commands" with consent. The
-credentials are discarded afterwards.
+By default the cloud is used only to import a controller's setup and saved
+content, after which the credentials are discarded. With the opt-in cloud
+access option the same client provides state reads, command fallback and soft
+reboot when the controller does not answer locally.
 
 Most endpoints expect ``deviceOrGroupId``; the architectural (per-zone)
 endpoints expect ``deviceId``. Write calls use HTTP ``PUT``.
@@ -32,7 +32,7 @@ from .const import (
     COGNITO_USER_POOL_ID,
     REQUEST_TIMEOUT,
 )
-from .validation import validate_design, validate_pattern
+from .validation import validate_design, validate_pattern, validate_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,9 +145,11 @@ class GemstoneApi:
         self._store(tokens)
         _LOGGER.debug("Gemstone login succeeded for %s", self._email)
 
-    async def _async_ensure_token(self) -> None:
-        """Sign in once; an import session never outlives its access token."""
+    async def _async_ensure_token(self, rejected: str | None = None) -> None:
+        """Sign in when there is no usable token, or the cloud rejected it."""
         async with self._lock:
+            if rejected is not None and self._access_token == rejected:
+                self._access_token = None
             if self._access_token and time.time() < self._expires_at - _TOKEN_LEEWAY:
                 return
             await self.async_login()
@@ -161,6 +163,7 @@ class GemstoneApi:
         *,
         params: dict[str, Any] | None = None,
         json_body: dict[str, Any] | None = None,
+        retry: bool = True,
     ) -> Any:
         """Send a request and return the decoded ``data`` payload."""
         await self._async_ensure_token()
@@ -179,6 +182,12 @@ class GemstoneApi:
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
             ) as resp:
                 text = await resp.text()
+
+                if resp.status in (401, 403) and retry:
+                    await self._async_ensure_token(rejected=access_token)
+                    return await self._request(
+                        method, path, params=params, json_body=json_body, retry=False
+                    )
 
                 if resp.status in (401, 403):
                     raise GemstoneAuthError("Gemstone rejected the session")
@@ -206,6 +215,13 @@ class GemstoneApi:
 
                 data = body.get("data") if isinstance(body, dict) else body
                 if method == "GET":
+                    if path == "/deviceControl/currentlyPlaying":
+                        try:
+                            return validate_state(data)
+                        except ValueError as err:
+                            raise GemstoneApiError(
+                                f"{path} returned invalid state"
+                            ) from err
                     if not isinstance(data, list) or any(
                         not isinstance(item, dict) for item in data
                     ):
@@ -313,6 +329,67 @@ class GemstoneApi:
             if len(batch) < page_size:
                 break
         return patterns
+
+    async def async_get_state(self, device_id: str) -> dict[str, Any]:
+        """Return what the controller is currently playing."""
+        return (
+            await self._request(
+                "GET",
+                "/deviceControl/currentlyPlaying",
+                params={"deviceOrGroupId": device_id},
+            )
+            or {}
+        )
+
+    async def async_set_power(self, device_id: str, on: bool) -> None:
+        """Turn the lights on or off."""
+        await self._request(
+            "PUT",
+            "/deviceControl/onState",
+            params={"deviceOrGroupId": device_id},
+            json_body={"onState": on},
+        )
+
+    async def async_play_color(self, device_id: str, color: int) -> None:
+        """Show a single solid colour (little-endian packed RGBW)."""
+        await self._request(
+            "PUT",
+            "/deviceControl/play/color",
+            params={"deviceOrGroupId": device_id},
+            json_body={"color": color},
+        )
+
+    async def async_play_pattern(self, device_id: str, pattern: dict[str, Any]) -> None:
+        """Play a whole-controller pattern."""
+        await self._request(
+            "PUT",
+            "/deviceControl/play/pattern",
+            params={"deviceOrGroupId": device_id},
+            json_body={"pattern": pattern},
+        )
+
+    async def async_play_design(self, device_id: str, design: dict[str, Any]) -> None:
+        """Play a saved architectural design (note: uses ``deviceId``)."""
+        payload = {**design, "preview": False}
+        await self._request(
+            "PUT",
+            "/deviceControl/play/architectural",
+            params={"deviceId": device_id},
+            json_body={"architectural": payload},
+        )
+
+    async def async_soft_reboot(self, device_id: str, homegroup_id: str) -> None:
+        """Request a soft reboot using the app's verified POST route.
+
+        An accepted request is not proof of controller recovery. Never replay
+        this non-idempotent request automatically, even after auth rejection.
+        """
+        await self._request(
+            "POST",
+            "/deviceControl/softReboot",
+            params={"deviceId": device_id, "homegroupId": homegroup_id},
+            retry=False,
+        )
 
     async def async_set_local_enabled(self, device_id: str, enabled: bool) -> None:
         """Turn the controller's "Allow Local Commands" switch on or off.

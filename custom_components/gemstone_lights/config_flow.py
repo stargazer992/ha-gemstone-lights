@@ -30,6 +30,7 @@ from .api import (
 from .bluetooth_api import GemstoneBluetoothApi
 from .const import (
     CONF_BLUETOOTH_ADDRESS,
+    CONF_CLOUD_ACCESS,
     CONF_EMAIL,
     CONF_ENABLE_LOCAL,
     CONF_HOST,
@@ -445,6 +446,14 @@ class GemstoneOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Choose what to change."""
+        return self.async_show_menu(
+            step_id="init", menu_options=["connection", "reimport", "cloud"]
+        )
+
+    async def async_step_connection(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Manage the LAN address and Bluetooth override."""
         errors = {}
         coordinator = getattr(self.config_entry, "runtime_data", None)
@@ -483,12 +492,13 @@ class GemstoneOptionsFlow(OptionsFlow):
                     errors[CONF_HOST_DEVICE] = "select_controller"
             if errors:
                 return self.async_show_form(
-                    step_id="init",
+                    step_id="connection",
                     data_schema=self.add_suggested_values_to_schema(schema, user_input),
                     errors=errors,
                 )
             return self.async_create_entry(
                 data={
+                    **self.config_entry.options,
                     CONF_HOST: host,
                     CONF_BLUETOOTH_ADDRESS: address,
                     CONF_HOST_DEVICE: selected,
@@ -496,7 +506,7 @@ class GemstoneOptionsFlow(OptionsFlow):
             )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="connection",
             data_schema=self.add_suggested_values_to_schema(
                 schema,
                 {
@@ -507,5 +517,113 @@ class GemstoneOptionsFlow(OptionsFlow):
                     },
                     **self.config_entry.options,
                 },
+            ),
+        )
+
+    def _api(self, user_input: dict[str, Any]) -> GemstoneApi:
+        return GemstoneApi(
+            self.hass,
+            async_get_clientsession(self.hass),
+            user_input[CONF_EMAIL].strip(),
+            user_input[CONF_PASSWORD],
+        )
+
+    async def async_step_reimport(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Refresh imported setup, saved patterns and the library; forget the password."""
+        errors: dict[str, str] = {}
+        coordinator = self.config_entry.runtime_data
+        if user_input is not None:
+            api = self._api(user_input)
+            error = None
+            try:
+                account = await async_fetch_account(api)
+                library = await async_fetch_library(api)
+            except GemstoneAuthError:
+                error = "invalid_auth"
+            except GemstoneRejectedError:
+                error = "cloud_rejected"
+            except GemstoneError:
+                error = "cannot_connect"
+            if error:
+                errors["base"] = error
+            else:
+                devices = {d["id"]: d for d in account["devices"]}
+                matched = [i for i in coordinator.device_ids if i in devices]
+                if not matched and len(devices) == 1 == len(coordinator.device_ids):
+                    devices = {coordinator.device_ids[0]: next(iter(devices.values()))}
+                    matched = list(devices)
+                if not matched:
+                    errors["base"] = "no_matching_controller"
+                else:
+                    for device_id in matched:
+                        await coordinator.async_reimport(
+                            device_id, devices[device_id], account["patterns"]
+                        )
+                    await self.hass.async_add_executor_job(
+                        write_library, library_path(self.hass), library
+                    )
+                    await coordinator.library.async_load()
+                    coordinator.async_update_listeners()
+                    return self.async_create_entry(data=dict(self.config_entry.options))
+        return self.async_show_form(
+            step_id="reimport",
+            errors=errors,
+            data_schema=vol.Schema(
+                {vol.Required(CONF_EMAIL): str, vol.Required(CONF_PASSWORD): str}
+            ),
+        )
+
+    async def async_step_cloud(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Opt in or out of cloud fallback; opting out deletes the credentials."""
+        errors: dict[str, str] = {}
+        options = {
+            k: v
+            for k, v in self.config_entry.options.items()
+            if k not in (CONF_CLOUD_ACCESS, CONF_EMAIL, CONF_PASSWORD)
+        }
+        if user_input is not None:
+            if not user_input.get(CONF_CLOUD_ACCESS):
+                return self.async_create_entry(data=options)
+            stored = self.config_entry.options
+            email = (user_input.get(CONF_EMAIL) or stored.get(CONF_EMAIL) or "").strip()
+            password = user_input.get(CONF_PASSWORD) or stored.get(CONF_PASSWORD) or ""
+            api = self._api({CONF_EMAIL: email, CONF_PASSWORD: password})
+            try:
+                await api.async_login()
+                await api.async_get_homegroups()
+            except GemstoneAuthError:
+                errors["base"] = "invalid_auth"
+            except GemstoneRejectedError:
+                errors["base"] = "cloud_rejected"
+            except GemstoneError:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_create_entry(
+                    data={
+                        **options,
+                        CONF_CLOUD_ACCESS: True,
+                        CONF_EMAIL: email,
+                        CONF_PASSWORD: password,
+                    }
+                )
+        return self.async_show_form(
+            step_id="cloud",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_CLOUD_ACCESS,
+                        default=self.config_entry.options.get(CONF_CLOUD_ACCESS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_EMAIL,
+                        default=self.config_entry.options.get(CONF_EMAIL, ""),
+                    ): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                }
             ),
         )
