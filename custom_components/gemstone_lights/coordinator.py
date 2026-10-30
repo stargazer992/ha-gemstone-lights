@@ -24,7 +24,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .api import GemstoneError
+from .api import GemstoneApi, GemstoneError
 from .bluetooth_api import GemstoneBluetoothApi, GemstoneBluetoothCommandError
 from .catalog import LocalCatalog
 from .commands import serialized
@@ -46,7 +46,7 @@ from .const import (
 )
 from .library import INDEX, PatternLibrary, library_path, write_library
 from .local_api import GemstoneLocalApi, GemstoneLocalError
-from .state import same_content
+from .state import encode_cloud_design, same_content, scale_color
 from .zones import ZoneMixin
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,6 +62,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         *,
+        api: GemstoneApi | None = None,
         bluetooth_address: str | None = None,
         host_override: str | None = None,
         host_device_id: str | None = None,
@@ -74,6 +75,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             update_interval=DEFAULT_SCAN_INTERVAL,
             config_entry=entry,
         )
+        self.api = api
         self.catalog = LocalCatalog(self)
         self.library = PatternLibrary(hass)
         self._bluetooth_address = bluetooth_address
@@ -105,6 +107,9 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         self._local: dict[str, GemstoneLocalApi | GemstoneBluetoothApi] = {}
         self._local_ok: dict[str, bool] = {}
         self._settings: dict[str, dict[str, Any]] = {}
+        # Opt-in cloud access: which controllers were last read via the cloud.
+        self._via_cloud: dict[str, bool] = {}
+        self._last_reboot: dict[str, float] = {}
 
     # -- persistence ----------------------------------------------------------
 
@@ -331,6 +336,8 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
 
     def control_transport(self, device_id: str) -> str:
         """Report the transport used for this controller."""
+        if self._via_cloud.get(device_id):
+            return "cloud"
         if isinstance(self._local.get(device_id), GemstoneBluetoothApi):
             return "bluetooth"
         return "local"
@@ -397,13 +404,13 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
     async def _async_state_for(
         self, device_id: str, info: dict[str, Any]
     ) -> dict[str, Any]:
-        """Read state from the controller."""
+        """Read state from the controller, or the cloud when opted in."""
         client = self._local_client(device_id, info)
-        if client is None:
-            raise GemstoneError(
-                "No LAN or Bluetooth address is configured for this controller"
-            )
         try:
+            if client is None:
+                raise GemstoneLocalError(
+                    "No LAN or Bluetooth address is configured for this controller"
+                )
             state = await client.async_get_state()
         except GemstoneLocalError as err:
             if self._local_ok.get(device_id) is not False:
@@ -411,7 +418,12 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
                     "Gemstone %s: controller unavailable (%s)", device_id, err
                 )
             self._local_ok[device_id] = False
-            raise GemstoneError(str(err)) from err
+            if self.api is None:
+                raise GemstoneError(str(err)) from err
+            state = await self.api.async_get_state(device_id)
+            self._via_cloud[device_id] = True
+            return state
+        self._via_cloud[device_id] = False
         if not self._local_ok.get(device_id):
             _LOGGER.info("Gemstone %s: connected via %s", device_id, client)
         self._local_ok[device_id] = True
@@ -534,6 +546,8 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         send,
         state: dict[str, Any],
         wire_state: dict[str, Any] | None = None,
+        cloud=None,
+        cloud_state: dict[str, Any] | None = None,
     ) -> None:
         """Send a command over LAN or Bluetooth.
 
@@ -541,21 +555,29 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         commands that arrive back to back. A failed poll never blocks a
         command; the controller is always tried.
         """
-        client = self._client(device_id)
         delay = LOCAL_WRITE_GAP - (monotonic() - self._last_write.get(device_id, 0))
         if delay > 0:
             await asyncio.sleep(delay)
         try:
-            await send(client)
+            if send is None:
+                raise GemstoneLocalError("This command needs the Gemstone cloud")
+            await send(self._client(device_id))
         except GemstoneBluetoothCommandError as err:
             raise GemstoneError(str(err)) from err
-        except GemstoneLocalError as err:
-            _LOGGER.warning("Gemstone %s: command failed (%s)", device_id, err)
-            self._local_ok[device_id] = False
-            raise GemstoneError(
-                f"The controller did not accept the command: {err}"
-            ) from err
+        except (GemstoneLocalError, GemstoneError) as err:
+            if send is not None:
+                _LOGGER.warning("Gemstone %s: command failed (%s)", device_id, err)
+                self._local_ok[device_id] = False
+            if self.api is None or cloud is None:
+                raise GemstoneError(
+                    f"The controller did not accept the command: {err}"
+                ) from err
+            await cloud()
+            self._last_write[device_id] = monotonic()
+            self._publish_command(device_id, state, cloud_state)
+            return
         self._local_ok[device_id] = True
+        self._via_cloud[device_id] = False
         self._last_write[device_id] = monotonic()
         self._publish_command(device_id, state, wire_state)
 
@@ -570,6 +592,8 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             lambda client: client.async_set_power(on),
             {**self.device_state(device_id), "onState": on},
             {**wire, "onState": on},
+            lambda: self.api.async_set_power(device_id, on),
+            {**wire, "onState": on},
         )
 
     @serialized
@@ -579,7 +603,12 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         """Show one solid colour; the controller keeps brightness separately."""
         state = {"onState": True, "colorB": {"value": packed, "brightness": brightness}}
         await self._async_command(
-            device_id, lambda client: client.async_play(deepcopy(state)), state
+            device_id,
+            lambda client: client.async_play(deepcopy(state)),
+            state,
+            cloud=lambda: self.api.async_play_color(
+                device_id, scale_color(packed, brightness)
+            ),
         )
 
     @serialized
@@ -589,6 +618,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             device_id,
             lambda client: client.async_play({"onState": True, "pattern": pattern}),
             {"onState": True, "pattern": deepcopy(pattern)},
+            cloud=lambda: self.api.async_play_pattern(device_id, pattern),
         )
 
     @serialized
@@ -600,18 +630,25 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             if payload.get("zonePatterns")
             else payload
         )
-        if local_payload is None:
+        if local_payload is None and self.api is None:
             raise HomeAssistantError(
                 "Animated zones need zones imported from the controller with "
                 "unchanged pixels; new or resized HA zones support motionless "
                 "palettes only"
             )
         wire = {"onState": True, "architectural": local_payload}
+        cloud_payload = encode_cloud_design(payload)
+        cloud_reported = deepcopy(cloud_payload)
+        for zone in cloud_reported.get("zonePatterns") or []:
+            # Hub2 reports the master's level in each zone after cloud play.
+            zone["pattern"]["brightness"] = cloud_reported.get("brightness", 255)
         await self._async_command(
             device_id,
-            lambda client: client.async_play(wire),
+            (lambda client: client.async_play(wire)) if local_payload else None,
             {"onState": True, "architectural": deepcopy(payload)},
             wire,
+            lambda: self.api.async_play_design(device_id, cloud_payload),
+            {"onState": True, "architectural": cloud_reported},
         )
 
     @serialized
@@ -635,3 +672,46 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             )
             return True
         return False
+
+    # -- opt-in cloud -----------------------------------------------------------
+
+    @serialized
+    async def async_soft_reboot(self, device_id: str) -> None:
+        """Ask the cloud to soft reboot a controller; never repeated automatically."""
+        if self.api is None:
+            raise GemstoneError("Soft reboot needs cloud access, which is off")
+        if monotonic() - self._last_reboot.get(device_id, float("-inf")) < 120:
+            raise GemstoneError(
+                "A reboot was recently requested; wait at least two minutes"
+            )
+        homegroup = None
+        for group in await self.api.async_get_homegroups():
+            if any(
+                d.get("id") == device_id
+                for d in await self.api.async_get_devices(group.get("id"))
+            ):
+                homegroup = group.get("id")
+                break
+        if homegroup is None:
+            raise GemstoneError("This controller is not on the Gemstone account")
+        self._last_reboot[device_id] = monotonic()
+        self._pending_states.pop(device_id, None)
+        await self.api.async_soft_reboot(device_id, homegroup)
+        _LOGGER.warning("Gemstone %s: cloud soft reboot requested", device_id)
+
+    async def async_reimport(
+        self, device_id: str, device: dict[str, Any], patterns: list[dict[str, Any]]
+    ) -> None:
+        """Replace imported setup and saved content with a fresh account copy."""
+        hub = device.get("hub") or {}
+        for known in self._known_devices:
+            if known["id"] == device_id:
+                known.setdefault("hub", {}).update(
+                    {k: hub[k] for k in _HUB_KEYS if k in hub}
+                )
+                if device.get("name"):
+                    known["name"] = device["name"]
+        self._zones[device_id] = list(device.get("zones") or [])
+        self._designs[device_id] = list(device.get("designs") or [])
+        self._patterns = list(patterns)
+        await self._async_save_cache()

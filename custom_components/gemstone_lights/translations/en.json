@@ -96,6 +96,14 @@
   "options": {
     "step": {
       "init": {
+        "title": "Gemstone Lights",
+        "menu_options": {
+          "connection": "Controller connection",
+          "reimport": "Re-import from Gemstone account",
+          "cloud": "Cloud access"
+        }
+      },
+      "connection": {
         "title": "Controller connection",
         "description": "Override the LAN address, or enter a Bluetooth address to use a connectable HA adapter or proxy instead of LAN; clear it to return to LAN. LAN requires Allow Local Commands. Bluetooth releases its connection after each operation.",
         "data": {
@@ -103,12 +111,33 @@
           "host_device_id": "Controller for address overrides",
           "bluetooth_address": "Bluetooth address (optional; replaces LAN for the selected controller)"
         }
+      },
+      "reimport": {
+        "title": "Re-import from Gemstone account",
+        "description": "Sign in once to refresh this controller's setup, zones, designs and saved patterns, and the library in www/gemstones. The password is not stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "cloud": {
+        "title": "Cloud access",
+        "description": "Off by default. When on, your Gemstone credentials are stored and the cloud is used when the controller does not answer locally, and for the soft reboot action. Turning it off deletes the stored credentials.",
+        "data": {
+          "cloud_access": "Use the Gemstone cloud as a fallback",
+          "email": "Email",
+          "password": "Password (leave empty to keep the stored one)"
+        }
       }
     },
     "error": {
       "invalid_host": "Enter an IPv4 address or hostname without a URL, port, or path.",
       "select_controller": "Select the controller this address belongs to.",
-      "invalid_bluetooth_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF."
+      "invalid_bluetooth_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF.",
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Could not reach the Gemstone cloud.",
+      "cloud_rejected": "The Gemstone cloud refused the import. The app identity this integration presents may be outdated; check the log.",
+      "no_matching_controller": "This account has no controller matching this entry."
     }
   },
   "services": {
@@ -219,6 +248,16 @@
         "content": {
           "name": "Content",
           "description": "The pattern or design object to play."
+        }
+      }
+    },
+    "soft_reboot": {
+      "name": "Soft reboot controller",
+      "description": "Request a cloud soft reboot. Requires the cloud access option; the controller may be unreachable for about one minute.",
+      "fields": {
+        "controller": {
+          "name": "Controller",
+          "description": "Select the whole-controller light, even if it is unavailable."
         }
       }
     }

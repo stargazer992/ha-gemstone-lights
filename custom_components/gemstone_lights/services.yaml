@@ -168,3 +168,16 @@ play_content:
     entity:
       integration: gemstone_lights
       domain: light
+soft_reboot:
+  name: Soft reboot controller
+  description: Request a cloud soft reboot. Requires the cloud access option; the
+    controller may be unreachable for about one minute.
+  fields:
+    controller:
+      name: Controller
+      description: Select the whole-controller light, even if it is unavailable.
+      required: true
+      selector:
+        entity:
+          integration: gemstone_lights
+          domain: light

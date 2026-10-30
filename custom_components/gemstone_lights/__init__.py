@@ -10,10 +10,13 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import service
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
+from .api import GemstoneApi
 from .const import (
     CONF_BLUETOOTH_ADDRESS,
+    CONF_CLOUD_ACCESS,
     CONF_EMAIL,
     CONF_HOST,
     CONF_HOST_DEVICE,
@@ -76,9 +79,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -
 
 async def async_setup_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> bool:
     """Set up Gemstone Lights from a config entry."""
+    api = None
+    if entry.options.get(CONF_CLOUD_ACCESS) and CONF_PASSWORD in entry.options:
+        api = GemstoneApi(
+            hass,
+            async_get_clientsession(hass),
+            entry.options[CONF_EMAIL],
+            entry.options[CONF_PASSWORD],
+        )
     coordinator = GemstoneCoordinator(
         hass,
         entry,
+        api=api,
         bluetooth_address=entry.options.get(
             CONF_BLUETOOTH_ADDRESS, entry.data.get(CONF_BLUETOOTH_ADDRESS)
         ),
