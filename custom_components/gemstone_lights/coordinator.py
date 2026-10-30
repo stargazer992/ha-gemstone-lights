@@ -44,6 +44,7 @@ from .const import (
     EFFECT_SOLID,
     LOCAL_WRITE_GAP,
 )
+from .library import INDEX, PatternLibrary, library_path, write_library
 from .local_api import GemstoneLocalApi, GemstoneLocalError
 from .state import same_content
 from .zones import ZoneMixin
@@ -74,6 +75,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             config_entry=entry,
         )
         self.catalog = LocalCatalog(self)
+        self.library = PatternLibrary(hass)
         self._bluetooth_address = bluetooth_address
         self._host_override = host_override
         self._host_device_id = host_device_id
@@ -92,6 +94,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
 
         # Runtime only: nothing below is persisted.
         self._speeds: dict[str, int] = {}
+        self._selected_folder: dict[str, str] = {}
         self._write_locks: dict[str, asyncio.Lock] = {}
         self._write_owners: dict[str, asyncio.Task] = {}
         self._last_write: dict[str, float] = {}
@@ -110,6 +113,8 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         cached = await self._store.async_load()
         if not isinstance(cached, dict):
             cached = {}
+        await self._async_move_cached_library(cached)
+        await self.library.async_load()
         self.catalog.restore(cached.get("local_catalog"))
         devices = cached.get("devices")
         if not isinstance(devices, list) or any(
@@ -138,6 +143,23 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             data = dict(self.config_entry.data)
             data.pop(CONF_IMPORT)
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+
+    async def _async_move_cached_library(self, cached: dict[str, Any]) -> None:
+        """Move a library cached by older versions into www/gemstones once."""
+        library, folders = cached.get("library"), cached.get("library_folders")
+        if not isinstance(library, dict) or not isinstance(folders, dict):
+            return
+        path = library_path(self.hass)
+        if await self.hass.async_add_executor_job((path / INDEX).exists):
+            return
+        try:
+            count = await self.hass.async_add_executor_job(
+                write_library, path, {"folders": folders, "patterns": library}
+            )
+        except (OSError, TypeError, KeyError, AttributeError) as err:
+            _LOGGER.warning("Could not move the cached Gemstone library: %s", err)
+            return
+        _LOGGER.info("Moved %s cached library patterns to %s", count, path)
 
     async def _async_save_cache(self) -> None:
         """Persist only the controller setup and saved content, when it changed."""
@@ -257,6 +279,36 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
     def patterns(self) -> list[dict[str, Any]]:
         """Return the saved patterns."""
         return self.catalog.merge("pattern", None, self._patterns)
+
+    def library_folder_options(self) -> list[str]:
+        """Return every downloaded library folder."""
+        return self.library.folder_options()
+
+    def selected_folder(self, device_id: str) -> str | None:
+        """Return the library folder currently being browsed."""
+        return self._selected_folder.get(device_id)
+
+    def set_selected_folder(self, device_id: str, label: str) -> None:
+        """Remember which library folder is being browsed."""
+        self._selected_folder[device_id] = label
+
+    def library_pattern_options(self, device_id: str) -> list[str]:
+        """Return the patterns inside the folder being browsed."""
+        return self.library.pattern_options(self._selected_folder.get(device_id))
+
+    def find_library_pattern(
+        self, name: str, folder_label: str | None = None
+    ) -> dict[str, Any] | None:
+        """Find a library pattern by name, optionally within one folder."""
+        return self.library.find(name, folder_label)
+
+    def library_pattern_names(self) -> list[str]:
+        """Return every library pattern name (used for error hints)."""
+        return self.library.names()
+
+    def library_size(self) -> int:
+        """Return how many library patterns are loaded."""
+        return self.library.size()
 
     def settings(self, device_id: str) -> dict[str, Any]:
         """Return hub settings read from the controller."""

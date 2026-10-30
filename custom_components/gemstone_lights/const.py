@@ -50,6 +50,9 @@ DATA_PATTERNS: Final = "patterns"
 # Shown in a select when nothing recognisable is playing.
 OPTION_NONE: Final = "None"
 
+# Shown in the library folder select before a folder is chosen.
+OPTION_PICK_FOLDER: Final = "Pick a folder"
+
 
 # --- Effects ---------------------------------------------------------------
 # Animation identifiers understood by the controller. These ship with the

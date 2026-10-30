@@ -25,6 +25,7 @@ from .api import (
     GemstoneError,
     GemstoneRejectedError,
     async_fetch_account,
+    async_fetch_library,
 )
 from .bluetooth_api import GemstoneBluetoothApi
 from .const import (
@@ -39,6 +40,7 @@ from .const import (
     CONF_PASSWORD,
     DOMAIN,
 )
+from .library import INDEX, library_path, write_library
 from .local_api import GemstoneLocalApi, GemstoneLocalError
 
 _LOGGER = logging.getLogger(__name__)
@@ -294,6 +296,7 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
                 ]
                 if not account["devices"]:
                     return self.async_abort(reason="no_new_controllers")
+                await self._async_download_library(api)
                 self._api = api
                 self._account = account
                 self._enable_local = user_input.get(CONF_ENABLE_LOCAL, False)
@@ -304,6 +307,19 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="cloud", data_schema=STEP_USER_SCHEMA, errors=errors
         )
+
+    async def _async_download_library(self, api: GemstoneApi) -> None:
+        """Save the official library to www/gemstones once; failures are not fatal."""
+        path = library_path(self.hass)
+        if await self.hass.async_add_executor_job((path / INDEX).exists):
+            return
+        try:
+            library = await async_fetch_library(api)
+            count = await self.hass.async_add_executor_job(write_library, path, library)
+        except (GemstoneError, OSError) as err:
+            _LOGGER.warning("Could not download the Gemstone library: %s", err)
+            return
+        _LOGGER.info("Saved %s Gemstone library patterns to %s", count, path)
 
     async def async_step_controller(
         self, user_input: dict[str, Any] | None = None

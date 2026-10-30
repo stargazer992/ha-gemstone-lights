@@ -11,7 +11,7 @@
       },
       "cloud": {
         "title": "Import from Gemstone account",
-        "description": "Sign in once to copy a controller's setup (light count, zones, colour order), designs and saved patterns into Home Assistant. Your password is not stored and the cloud is not used after setup.",
+        "description": "Sign in once to copy a controller's setup (light count, zones, colour order), designs and saved patterns into Home Assistant, and to save Gemstone's official pattern library to the www/gemstones folder. Your password is not stored and the cloud is not used after setup.",
         "data": {
           "email": "Email",
           "password": "Password",
@@ -74,6 +74,12 @@
       },
       "pattern": {
         "name": "Pattern"
+      },
+      "library_folder": {
+        "name": "Library folder"
+      },
+      "library_pattern": {
+        "name": "Library pattern"
       }
     },
     "sensor": {
@@ -106,6 +112,20 @@
     }
   },
   "services": {
+    "play_library_pattern": {
+      "name": "Play library pattern",
+      "description": "Play a pattern from Gemstone's official library, downloaded once to www/gemstones, by name.",
+      "fields": {
+        "pattern": {
+          "name": "Pattern",
+          "description": "The pattern's name."
+        },
+        "folder": {
+          "name": "Folder",
+          "description": "Optional library folder to search within."
+        }
+      }
+    },
     "save_content": {
       "name": "Save local content",
       "description": "Create or replace a pattern, design or zone in Home Assistant. Vendor catalogs are unchanged.",

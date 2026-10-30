@@ -6,6 +6,8 @@ Two dropdowns per controller:
   individual zones (front upper, rear lower, ...), so this is how you drive
   front/back independently.
 * **Pattern** - the saved patterns, applied to the whole controller.
+* **Library folder / Library pattern** - Gemstone's official library, read
+  from the files downloaded once to ``www/gemstones``.
 
 Names are not unique (the same pattern can sit in two folders), so options get
 a distinguishing suffix and are resolved back to the exact entry.
@@ -21,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GemstoneConfigEntry
-from .const import OPTION_NONE
+from .const import OPTION_NONE, OPTION_PICK_FOLDER
 from .coordinator import GemstoneCoordinator
 from .entity import GemstoneEntity, async_add_discovered_entities
 
@@ -38,6 +40,8 @@ async def async_setup_entry(
         lambda coordinator, device_id: [
             GemstoneDesignSelect(coordinator, device_id),
             GemstonePatternSelect(coordinator, device_id),
+            GemstoneLibraryFolderSelect(coordinator, device_id),
+            GemstoneLibraryPatternSelect(coordinator, device_id),
         ],
     )
 
@@ -163,3 +167,80 @@ class GemstonePatternSelect(_GemstoneContentSelect):
 
     async def _async_play(self, content: dict[str, Any]) -> None:
         await self.coordinator.async_play_pattern(self._device_id, content)
+
+
+class GemstoneLibraryFolderSelect(GemstoneEntity, SelectEntity):
+    """Browse the downloaded official pattern library by folder.
+
+    The library runs to well over a thousand patterns, which is far too many
+    for one dropdown, so this picks the folder and the companion select then
+    offers just that folder's patterns. Choosing a folder changes nothing on
+    the lights.
+    """
+
+    _attr_translation_key = "library_folder"
+    _attr_icon = "mdi:folder-multiple"
+
+    def __init__(self, coordinator: GemstoneCoordinator, device_id: str) -> None:
+        """Initialise the folder browser."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = f"{device_id}_library_folder"
+
+    @property
+    def options(self) -> list[str]:
+        """Return every library folder."""
+        return [OPTION_PICK_FOLDER, *self.coordinator.library_folder_options()]
+
+    @property
+    def current_option(self) -> str:
+        """Return the folder being browsed."""
+        chosen = self.coordinator.selected_folder(self._device_id)
+        return chosen if chosen in self.options else OPTION_PICK_FOLDER
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Report how much of the library is loaded."""
+        return {"library_patterns": self.coordinator.library_size()}
+
+    async def async_select_option(self, option: str) -> None:
+        """Browse a folder."""
+        self.coordinator.set_selected_folder(self._device_id, option)
+        # Refresh the companion select so it offers this folder's patterns.
+        self.coordinator.async_update_listeners()
+
+
+class GemstoneLibraryPatternSelect(GemstoneEntity, SelectEntity):
+    """Play a pattern from the folder being browsed."""
+
+    _attr_translation_key = "library_pattern"
+    _attr_icon = "mdi:playlist-music"
+
+    def __init__(self, coordinator: GemstoneCoordinator, device_id: str) -> None:
+        """Initialise the library pattern select."""
+        super().__init__(coordinator, device_id)
+        self._attr_unique_id = f"{device_id}_library_pattern"
+
+    @property
+    def options(self) -> list[str]:
+        """Return the patterns in the folder being browsed."""
+        return [
+            OPTION_NONE,
+            *self.coordinator.library_pattern_options(self._device_id),
+        ]
+
+    @property
+    def current_option(self) -> str:
+        """Return the playing pattern when it belongs to this folder."""
+        playing = (self._state.get("pattern") or {}).get("name")
+        return playing if playing in self.options else OPTION_NONE
+
+    async def async_select_option(self, option: str) -> None:
+        """Play the chosen library pattern."""
+        if option == OPTION_NONE:
+            await self.coordinator.async_set_power(self._device_id, False)
+            return
+
+        folder = self.coordinator.selected_folder(self._device_id)
+        data = self.coordinator.find_library_pattern(option, folder)
+        if data:
+            await self.coordinator.async_play_pattern(self._device_id, data)

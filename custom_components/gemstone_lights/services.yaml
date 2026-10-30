@@ -1,3 +1,28 @@
+play_library_pattern:
+  name: Play library pattern
+  description: Play a pattern from Gemstone's official library by name. The library
+    holds well over a thousand patterns, far more than a dropdown can offer, so this
+    is the way to reach any of them from an automation.
+  target:
+    entity:
+      integration: gemstone_lights
+      domain: light
+  fields:
+    pattern:
+      name: Pattern
+      description: The pattern's name, exactly as it appears in the Gemstone app.
+      required: true
+      example: Happy New Year
+      selector:
+        text: null
+    folder:
+      name: Folder
+      description: Optional. Restricts the search to one library folder, useful when
+        the same pattern name appears in more than one.
+      required: false
+      example: sports / NFL
+      selector:
+        text: null
 save_content:
   name: Save local content
   description: Create or replace a pattern, design or zone in Home Assistant. Vendor

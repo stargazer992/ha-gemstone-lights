@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import service
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -39,6 +42,14 @@ type GemstoneConfigEntry = ConfigEntry[GemstoneCoordinator]
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register actions even when no controller is currently loaded."""
     register_services(hass)
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "play_library_pattern",
+        entity_domain="light",
+        schema={vol.Required("pattern"): cv.string, vol.Optional("folder"): cv.string},
+        func="async_play_library_pattern",
+    )
     return True
 
 
