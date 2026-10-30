@@ -29,6 +29,9 @@ async def test_options_reject_url_and_bind_valid_host_to_controller(
 ):
     # Given an account with one known controller and its real Home Assistant options flow.
     flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": "connection"}
+    )
     # When a URL is submitted in place of a host, then a plain hostname is submitted.
     rejected = await hass.config_entries.options.async_configure(
         flow["flow_id"], {"host": "http://192.0.2.10/path"}

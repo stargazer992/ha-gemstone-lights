@@ -61,6 +61,9 @@ async def test_switching_existing_controller_to_bluetooth_preserves_entities_and
     # Given an existing controller with imported zones.
     original_entities = set(hass.states.async_entity_ids("light"))
     flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": "connection"}
+    )
     # When Bluetooth replaces the LAN transport.
     result = await hass.config_entries.options.async_configure(
         flow["flow_id"], {"bluetooth_address": ADDRESS}
@@ -81,6 +84,9 @@ async def test_clearing_bluetooth_override_returns_existing_controller_to_lan(
 ):
     # Given an existing controller temporarily using Bluetooth through its options.
     flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": "connection"}
+    )
     await hass.config_entries.options.async_configure(
         flow["flow_id"], {"bluetooth_address": ADDRESS}
     )
@@ -89,6 +95,9 @@ async def test_clearing_bluetooth_override_returns_existing_controller_to_lan(
     http.requests.clear()
     # When the Bluetooth address is cleared.
     flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": "connection"}
+    )
     await hass.config_entries.options.async_configure(
         flow["flow_id"], {"bluetooth_address": ""}
     )
@@ -144,6 +153,9 @@ async def test_rejected_bluetooth_command_keeps_connection_available_without_rep
     from custom_components.gemstone_lights.api import GemstoneError
 
     flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": "connection"}
+    )
     await hass.config_entries.options.async_configure(
         flow["flow_id"], {"bluetooth_address": ADDRESS}
     )
