@@ -28,6 +28,9 @@ class Vendor:
         }
         self.designs = []
         self.folders = []
+        self.library_folders = []
+        self.library_patterns = []
+        self.reads_waiting = 0
         self.patterns = {}
         self.writes = []
         self.failures = {}
@@ -93,8 +96,8 @@ class Vendor:
             "/deviceControl/architectural/list": self.designs,
             "/folders/list": self.folders,
             "/folders/pattern/list": self.patterns.get(url.query.get("folderId"), []),
-            "/downloads/folders/listGemstoneManaged": [],
-            "/downloads/folders/pattern/listGemstoneManaged": [],
+            "/downloads/folders/listGemstoneManaged": self.library_folders,
+            "/downloads/folders/pattern/listGemstoneManaged": self.library_patterns,
         }[path]
         return CallbackResult(payload={"data": deepcopy(data)})
 
@@ -129,7 +132,9 @@ class Vendor:
                 self.states.setdefault(device, {}).update(playing)
             return CallbackResult(status=200)
         if self.hold_reads is not None:
+            self.reads_waiting += 1
             await self.hold_reads.wait()
+            self.reads_waiting -= 1
         key = (
             "currentlyPlaying"
             if url.path.endswith("currently-playing")

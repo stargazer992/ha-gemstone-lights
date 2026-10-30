@@ -70,7 +70,7 @@ async def test_local_failure_reports_unavailable_then_recovers_without_cloud(
 
 
 async def test_cloud_era_account_entry_migrates_to_local_with_cached_content(
-    hass, vendor, http, hass_storage, enable_custom_integrations
+    hass, vendor, http, hass_storage, config_dir, enable_custom_integrations
 ):
     # Given a version 1 account entry with credentials and an upstream-format cache.
     entry = MockConfigEntry(
@@ -94,6 +94,13 @@ async def test_cloud_era_account_entry_migrates_to_local_with_cached_content(
                 {"folder": "Mine", "name": "Glamo WW", "data": {"colors": [255]}}
             ],
             "library": {"folder": [{"name": "Holiday", "data": {"colors": [255]}}]},
+            "library_folders": {
+                "folder": {
+                    "id": "folder",
+                    "folderName": "Christmas",
+                    "category": "holidays",
+                }
+            },
             "speeds": {"hub": 42},
             "state_aliases": {"hub": {"logical": {}, "wire": {}}},
         },
@@ -108,6 +115,8 @@ async def test_cloud_era_account_entry_migrates_to_local_with_cached_content(
     assert entry.options == {"host": "192.0.2.10"}
     assert {zone["id"] for zone in coordinator.zones("hub")} == {"front", "back"}
     assert [p["name"] for p in coordinator.patterns()] == ["Glamo WW"]
+    assert coordinator.find_library_pattern("Holiday") is not None
+    assert (config_dir / "www" / "gemstones" / "index.json").exists()
     assert set(hass_storage[key]["data"]) == {
         "devices",
         "local_catalog",

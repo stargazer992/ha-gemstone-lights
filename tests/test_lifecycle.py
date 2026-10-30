@@ -19,6 +19,8 @@ async def test_imported_controller_gets_every_platform(hass, loaded_entry):
         "hub_now_playing",
         "hub_design",
         "hub_pattern",
+        "hub_library_folder",
+        "hub_library_pattern",
         "hub_zone_front",
         "hub_zone_back",
     }

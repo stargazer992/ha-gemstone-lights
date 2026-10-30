@@ -44,6 +44,13 @@ LOCAL_DEVICE = {
 }
 
 
+@pytest.fixture(autouse=True)
+def config_dir(hass, tmp_path):
+    """Keep files the integration writes (the pattern library) per test."""
+    hass.config.config_dir = str(tmp_path)
+    return tmp_path
+
+
 @pytest.fixture
 def entry(hass):
     result = MockConfigEntry(
