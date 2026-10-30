@@ -96,6 +96,17 @@ Copy `custom_components/gemstone_lights` into your Home Assistant
   import again to add another controller. If the imported address does not
   answer, setup asks for it.
 
+**Configure** offers three steps:
+
+- **Controller connection**: LAN address override or Bluetooth address.
+- **Re-import from Gemstone account**: sign in once to refresh the controller's
+  setup, zones, designs, saved patterns and the library. The password is not kept.
+- **Cloud access** (off by default): stores your Gemstone credentials so commands
+  and state reads fall back to the cloud when the controller does not answer
+  locally, and enables the `soft_reboot` action. Turning it off deletes the
+  stored credentials. The Now playing sensor's `control` attribute then shows
+  `cloud` while the cloud is in use.
+
 Entries created by earlier versions with an account are converted on upgrade:
 credentials are removed and cached controllers, zones, designs and saved
 patterns are kept; a cached library is moved to `www/gemstones`.

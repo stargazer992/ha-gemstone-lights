@@ -17,6 +17,11 @@
 - List patterns with the same name as `Name (Folder)` and play the exact one
   chosen.
 - Add redacted diagnostics.
+- Add **Re-import from Gemstone account** to the options to refresh imported
+  content and the library without keeping the password.
+- Add an opt-in **Cloud access** option (off by default) that stores credentials
+  for cloud fallback when the LAN fails and for the `soft_reboot` action;
+  turning it off deletes them.
 - Choosing None in the design, pattern or library pattern select no longer
   turns the lights off.
 
