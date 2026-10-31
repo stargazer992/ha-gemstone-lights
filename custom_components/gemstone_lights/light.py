@@ -33,6 +33,7 @@ from .color_util import pack, unpack
 from .const import EFFECT_LIST, EFFECT_SOLID
 from .coordinator import GemstoneCoordinator
 from .entity import GemstoneEntity
+from .select import labelled
 
 
 def _suggest(wanted: str, names: list[str]) -> str:
@@ -118,6 +119,60 @@ class _GemstoneBaseLight(GemstoneEntity, LightEntity):
                 + _suggest(pattern, self.coordinator.library_pattern_names())
             )
         return data
+
+    def _saved_choices(self, folder: str | None) -> list[tuple[str, str, dict]]:
+        """Saved designs (controller only) then patterns, labelled like the dropdowns."""
+        choices = []
+        if not hasattr(self, "_zone_id"):
+            designs = [
+                (design["name"], "", design)
+                for design in self.coordinator.designs(self._device_id)
+                if design.get("name")
+            ]
+            choices += [("design", *item) for item in labelled(designs)]
+        patterns = [
+            (pattern["name"], pattern.get("folder") or "", pattern["data"])
+            for pattern in self.coordinator.patterns()
+            if pattern.get("name")
+            and isinstance(pattern.get("data"), dict)
+            and (not folder or (pattern.get("folder") or "") == folder)
+        ]
+        return choices + [("pattern", *item) for item in labelled(patterns)]
+
+    async def async_play_by_name(self, name: str, folder: str | None = None) -> None:
+        """Play a saved design or pattern by name, else a library pattern."""
+        saved = self._saved_choices(folder)
+        for kind, label, content in saved:
+            if label == name:
+                return await self._async_play_named(kind, content)
+        if duplicates := [
+            label for _, label, _ in saved if label.startswith(f"{name} (")
+        ]:
+            raise HomeAssistantError(
+                f"More than one saved item is called '{name}'; use one of: "
+                + ", ".join(duplicates)
+            )
+        data = self.coordinator.find_library_pattern(name, folder)
+        if data is None:
+            raise HomeAssistantError(
+                f"No saved design or pattern, or library pattern, called '{name}'."
+                + _suggest(
+                    name,
+                    [label for _, label, _ in saved]
+                    + self.coordinator.library_pattern_names(),
+                )
+            )
+        await self._async_play_named("pattern", data)
+
+    async def _async_play_named(self, kind: str, content: dict[str, Any]) -> None:
+        if hasattr(self, "_zone_id"):
+            await self.coordinator.async_play_zone_pattern(
+                self._device_id, self._zone_id, content
+            )
+        elif kind == "design":
+            await self.coordinator.async_play_design(self._device_id, content)
+        else:
+            await self.coordinator.async_play_pattern(self._device_id, content)
 
 
 class GemstoneLight(_GemstoneBaseLight):

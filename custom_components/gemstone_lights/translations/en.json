@@ -155,6 +155,20 @@
         }
       }
     },
+    "play_by_name": {
+      "name": "Play by name",
+      "description": "Play a saved design or pattern by name, or a library pattern when nothing saved matches. Target several lights to start them together.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "The name as shown in the Design or Pattern dropdown."
+        },
+        "folder": {
+          "name": "Folder",
+          "description": "Optional folder to search within."
+        }
+      }
+    },
     "save_content": {
       "name": "Save local content",
       "description": "Create or replace a pattern, design or zone in Home Assistant. Vendor catalogs are unchanged.",

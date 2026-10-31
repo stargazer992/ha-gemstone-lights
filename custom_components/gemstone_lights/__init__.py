@@ -53,6 +53,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         schema={vol.Required("pattern"): cv.string, vol.Optional("folder"): cv.string},
         func="async_play_library_pattern",
     )
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        "play_by_name",
+        entity_domain="light",
+        schema={vol.Required("name"): cv.string, vol.Optional("folder"): cv.string},
+        func="async_play_by_name",
+    )
     return True
 
 

@@ -23,6 +23,31 @@ play_library_pattern:
       example: sports / NFL
       selector:
         text: null
+play_by_name:
+  name: Play by name
+  description: Play a saved design or pattern (such as Glamo WW) by name, or a library
+    pattern when nothing saved matches. Target several controller lights to start
+    them all at once.
+  target:
+    entity:
+      integration: gemstone_lights
+      domain: light
+  fields:
+    name:
+      name: Name
+      description: The name as shown in the Design or Pattern dropdown, for example
+        "Glamo WW" or "Glamo WW (Holiday)".
+      required: true
+      example: Glamo WW
+      selector:
+        text: null
+    folder:
+      name: Folder
+      description: Optional. Only consider saved patterns or library patterns in this
+        folder.
+      required: false
+      selector:
+        text: null
 save_content:
   name: Save local content
   description: Create or replace a pattern, design or zone in Home Assistant. Vendor
