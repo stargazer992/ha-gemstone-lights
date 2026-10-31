@@ -8,6 +8,7 @@ from unittest.mock import patch
 import yaml
 from homeassistant.helpers import entity_registry as er
 
+from custom_components.gemstone_lights.const import LOCAL_MISSED_POLLS
 from custom_components.gemstone_lights.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -60,7 +61,8 @@ async def test_command_right_after_failed_poll_still_reaches_controller(
 ):
     # Given a poll that failed, marking the controller unavailable.
     vendor.failures["/device-state/currently-playing"] = 503
-    await coordinator.async_refresh()
+    for _ in range(LOCAL_MISSED_POLLS):
+        await coordinator.async_refresh()
     assert not coordinator.device_available("hub")
     vendor.failures.clear()
     # When a command is sent before the next poll.

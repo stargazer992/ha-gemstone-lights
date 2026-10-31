@@ -2,10 +2,10 @@
 
 # Gemstone Lights for Home Assistant
 
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5)](https://my.home-assistant.io/redirect/hacs_repository/?owner=xagon0&repository=ha-gemstone-lights&category=integration)
-[![Latest release](https://img.shields.io/github/v/release/xagon0/ha-gemstone-lights)](https://github.com/xagon0/ha-gemstone-lights/releases/latest)
-[![Validate](https://github.com/xagon0/ha-gemstone-lights/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/xagon0/ha-gemstone-lights/actions/workflows/validate.yml)
-[![License](https://img.shields.io/github/license/xagon0/ha-gemstone-lights)](LICENSE)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5)](https://my.home-assistant.io/redirect/hacs_repository/?owner=stargazer992&repository=ha-gemstone-lights&category=integration)
+[![Latest release](https://img.shields.io/github/v/release/stargazer992/ha-gemstone-lights)](https://github.com/stargazer992/ha-gemstone-lights/releases/latest)
+[![Validate](https://github.com/stargazer992/ha-gemstone-lights/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/stargazer992/ha-gemstone-lights/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/stargazer992/ha-gemstone-lights)](LICENSE)
 
 **Local control** for [Gemstone Lights](https://www.gemstonelights.com/)
 **Hub2** in Home Assistant.
@@ -18,7 +18,7 @@ editing, playlists, schedules and supported features.
 
 ## Quick install
 
-[![Open Gemstone Lights in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=xagon0&repository=ha-gemstone-lights&category=integration)
+[![Open Gemstone Lights in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=stargazer992&repository=ha-gemstone-lights&category=integration)
 
 Requires HACS to be installed. Open the link, select **Download**, restart Home
 Assistant, then follow [Setup](#setup).
@@ -71,7 +71,7 @@ Gemstone Lights is included in the default HACS catalog.
 If Gemstone Lights does not appear in search, add it as a custom repository:
 
 1. In HACS, open the three-dot menu → **Custom repositories**.
-2. Enter `https://github.com/xagon0/ha-gemstone-lights`, select type
+2. Enter `https://github.com/stargazer992/ha-gemstone-lights`, select type
    **Integration**, and choose **Add**.
 3. Follow the search, download, and restart steps above.
 
@@ -128,7 +128,7 @@ The Now playing sensor's `control` attribute reports `local` (LAN) or
 
 Only the controller setup, zones, designs and saved patterns are stored by the
 integration. Speed, browsing state and command history are kept in memory.
-Failed reads mark the controller unavailable and retry on the next poll; a
+A controller is marked unavailable after three failed reads in a row; a
 command is always sent to the controller, even right after a failed poll.
 Controllers are polled in parallel, and a slow read never delays a command.
 
@@ -189,8 +189,8 @@ Unknown pattern names produce an error with suggested matches.
 - **Brightness** is controlled separately from colour.
 - **Dimming preserves patterns and designs**, including their colours and zones.
   Changing an effect also preserves the pattern's colours.
-- **State updates** run every 30 seconds and after commands. Failed reads mark
-  the affected controller unavailable.
+- **State updates** run every 30 seconds and after commands. Three failed reads
+  in a row mark the affected controller unavailable.
 - **Patterns or zones changed in the Gemstone app later** are not picked up;
   run the import again for a new controller, or recreate them in HA.
 - **Animated zones** need zones imported from the controller with unchanged

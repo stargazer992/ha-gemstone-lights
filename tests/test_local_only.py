@@ -4,6 +4,7 @@ import pytest
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.gemstone_lights.const import LOCAL_MISSED_POLLS
 from custom_components.gemstone_lights.coordinator import GemstoneCoordinator
 
 
@@ -53,8 +54,9 @@ async def test_local_failure_reports_unavailable_then_recovers_without_cloud(
     await coordinator._async_setup()
     await coordinator.async_refresh()
     vendor.failures["/device-state/currently-playing"] = 503
-    # When a poll fails and a command is attempted during the outage.
-    await coordinator.async_refresh()
+    # When polls keep failing and a command is attempted during the outage.
+    for _ in range(LOCAL_MISSED_POLLS):
+        await coordinator.async_refresh()
     vendor.failures["/device-control/play"] = 503
     with pytest.raises(HomeAssistantError, match="did not accept"):
         await coordinator.async_set_power("hub", False)

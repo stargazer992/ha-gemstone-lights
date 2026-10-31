@@ -105,6 +105,9 @@ CONF_HOST: Final = "host"
 CONF_HOST_DEVICE: Final = "host_device_id"
 CONF_ENABLE_LOCAL: Final = "enable_local"
 LOCAL_TIMEOUT: Final = 8
+# Consecutive failed polls before a controller is shown unavailable; hubs
+# occasionally miss a single read.
+LOCAL_MISSED_POLLS: Final = 3
 LOCAL_MAX_PAYLOAD: Final = 15 * 1024
 # The vendor drivers tag their writes; the controller echoes this back.
 LOCAL_ORIGIN: Final = "control4"

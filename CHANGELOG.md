@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1
+
+- Show a controller as unavailable only after three missed polls in a row
+  (about 90 seconds), so a single slow reply no longer makes it flicker.
+- Point the code owner, documentation and issue links to
+  stargazer992/ha-gemstone-lights.
+
 ## 2.0.0
 
 - Never use the Gemstone cloud at runtime. The account is used once during
