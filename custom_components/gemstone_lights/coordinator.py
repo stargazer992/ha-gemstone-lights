@@ -330,6 +330,26 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         client = self._local.get(device_id)
         return client.host if isinstance(client, GemstoneLocalApi) else None
 
+    async def async_follow_address(self, device_id: str, host: str) -> str | None:
+        """Adopt the LAN address DHCP reported; return the address it replaced."""
+        device = next(
+            (d for d in self._known_devices if d.get("id") == device_id), None
+        )
+        if device is None or self.bluetooth_address(device_id):
+            return None
+        hub = device.setdefault("hub", {})
+        override = bool(self._targets(device_id) and self._host_override)
+        old = (self._host_override if override else None) or hub.get("localIp")
+        if old == host:
+            return None
+        hub["localIp"] = host
+        if override:
+            self._host_override = host
+        _LOGGER.info("Gemstone %s: following new address %s", device_id, host)
+        await self._async_save_cache()
+        await self.async_request_refresh()
+        return old
+
     def bluetooth_address(self, device_id: str) -> str | None:
         """Return the explicitly selected Bluetooth address for this controller."""
         if self._targets(device_id):

@@ -8,6 +8,11 @@
   "dependencies": [
     "bluetooth_adapters"
   ],
+  "dhcp": [
+    {
+      "hostname": "gemstone-h2-*"
+    }
+  ],
   "documentation": "https://github.com/stargazer992/ha-gemstone-lights",
   "integration_type": "hub",
   "iot_class": "local_polling",

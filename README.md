@@ -110,7 +110,10 @@ Copy `custom_components/gemstone_lights` into your Home Assistant
 Entries created by earlier versions with an account are converted on upgrade:
 credentials are removed and cached controllers, zones, designs and saved
 patterns are kept; a cached library is moved to `www/gemstones`.
-Reserve the controller's DHCP address. The options form can override an address
+When the router gives a controller a new address, Home Assistant's DHCP
+discovery spots its `Gemstone-h2-...` hostname and the integration switches to
+the new address automatically. Reserving the address in the router is still
+recommended. The options form can override an address
 for the selected controller without changing entity IDs. A Bluetooth address
 replaces LAN for that selected controller; clear it to return to LAN. Close the
 vendor app's Bluetooth connection before HA connects.
