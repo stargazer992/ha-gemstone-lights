@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+- Keep which saved patterns are hearted in the Gemstone app. The Pattern and
+  Design selects list them in a `favorites` attribute. Run the account import
+  again (Configure → Re-import) to pick up favourites for an existing setup.
+
 ## 2.2.0
 
 - Effects chosen in Home Assistant now send each animation's own fields:

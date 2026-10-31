@@ -89,6 +89,19 @@ class _GemstoneContentSelect(GemstoneEntity, SelectEntity):
     def _choices(self) -> list[tuple[str, dict[str, Any]]]:
         raise NotImplementedError
 
+    def _favorite_ids(self) -> set[int]:
+        """Return ``id()`` of each content hearted in the Gemstone app."""
+        return set()
+
+    def _favorites(self) -> list[str]:
+        favorite = self._favorite_ids()
+        return [label for label, content in self._choices() if id(content) in favorite]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """List the options hearted in the Gemstone app."""
+        return {"favorites": self._favorites()}
+
     @property
     def options(self) -> list[str]:
         """Return unique labels for the saved content."""
@@ -140,7 +153,17 @@ class GemstoneDesignSelect(_GemstoneContentSelect):
     def extra_state_attributes(self) -> dict[str, Any]:
         """List the zones this controller has, for reference in automations."""
         zones = self.coordinator.zones(self._device_id)
-        return {"zones": [zone.get("name") for zone in zones if zone.get("name")]}
+        return {
+            **super().extra_state_attributes,
+            "zones": [zone.get("name") for zone in zones if zone.get("name")],
+        }
+
+    def _favorite_ids(self) -> set[int]:
+        return {
+            id(design)
+            for design in self.coordinator.designs(self._device_id)
+            if design.get("isFavorite")
+        }
 
 
 class GemstonePatternSelect(_GemstoneContentSelect):
@@ -163,6 +186,13 @@ class GemstonePatternSelect(_GemstoneContentSelect):
                 if pattern.get("name") and isinstance(pattern.get("data"), dict)
             ]
         )
+
+    def _favorite_ids(self) -> set[int]:
+        return {
+            id(pattern["data"])
+            for pattern in self.coordinator.patterns()
+            if pattern.get("favorite") and isinstance(pattern.get("data"), dict)
+        }
 
     async def _async_play(self, content: dict[str, Any]) -> None:
         await self.coordinator.async_play_pattern(self._device_id, content)
