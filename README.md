@@ -42,7 +42,8 @@ Assistant, then follow [Setup](#setup).
   as `Name (Folder)`.
 - **Local editing and backups** - create patterns, designs and static zones; save
   current content; import and export portable catalogs.
-- **Local automation blueprints** - playlists, weekly schedules and sunset/sunrise.
+- **Local automation blueprints** - playlists, weekly schedules, sunset/sunrise
+  and a holiday calendar.
 - **Local control** - commands go directly to the controller on your network
   and work without an internet connection. The address can be entered manually
   or imported from an account.

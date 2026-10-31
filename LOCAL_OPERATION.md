@@ -23,6 +23,7 @@ from unresolved controller features.
 | Playlists | Included HA script blueprint | HA advances the sequence. Stop the script before manual control; HA restart stops playback advancement. No native playlist CRUD/upload protocol verified. |
 | Weekly schedules | Included HA Schedule-helper automation blueprint | HA must run; reconciles the schedule at HA startup. |
 | Sunrise/sunset | Included local Sun automation blueprint | Uses HA's configured location and clock. HA must run. |
+| Holiday calendar | Included calendar automation blueprint | Each event's title names the saved design, saved pattern or library pattern to play (via `play_by_name`). Use a calendar only for the lights; a Local Calendar works offline. HA must run. |
 | Existing controller timers | Vendor documents offline operation | BLE count, creation and deletion now verified; timer detail reads and execution semantics remain unresolved. No HA native-timer editor is implemented; blueprints do not edit these timers. |
 | Holiday/seasonal automation | HA local calendars, date conditions, scripts and locally stored patterns | Vendor Autopilot subscriptions and automatic new-content delivery are not replicated. |
 | Groups and scenes | HA light groups/scenes and multi-entity action targets | Commands are independent; no frame-accurate multi-controller synchronization. |
@@ -151,6 +152,7 @@ Import these blueprint URLs using HA's blueprint import interface:
 - [Local playlist script](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/script/gemstone_lights/local_playlist.yaml)
 - [Weekly schedule automation](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_schedule.yaml)
 - [Sunset-to-sunrise automation](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_sun.yaml)
+- [Holiday calendar automation](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/holiday_calendar.yaml)
 
 For an offline installation, copy the files from this repository's `blueprints`
 folder into HA's corresponding `blueprints/script` or `blueprints/automation`

@@ -100,3 +100,37 @@ async def test_schedule_applies_content_then_turns_off(
     assert lit["pattern"]["colors"] == [4278190080]
     assert vendor.states["hub"]["onState"] is False
     assert [write[0] for write in vendor.writes] == ["local", "local"]
+
+
+async def test_holiday_calendar_plays_event_names_and_turns_off(
+    hass, loaded_entry, vendor
+):
+    # Given saved patterns named after calendar events, and the holiday blueprint.
+    loaded_entry._patterns = [
+        {"folder": "", "name": "Glamo WW", "data": {"id": "ww", "colors": [255]}},
+        {"folder": "", "name": "Christmas", "data": {"id": "xmas", "colors": [65280]}},
+    ]
+    light = er.async_get(hass).async_get_entity_id(
+        "light", "gemstone_lights", "hub_light"
+    )
+    hass.states.async_set("calendar.lights", "off", {"message": ""})
+    config = configured_blueprint(
+        "automation/gemstone_lights/holiday_calendar.yaml",
+        {"calendar": "calendar.lights", "controllers": [light]},
+    )
+    config["id"] = "holiday_calendar"
+    await async_setup_component(hass, "automation", {"automation": config})
+    await hass.async_block_till_done()
+    # When one event starts, a back-to-back event follows, and then it ends.
+    hass.states.async_set("calendar.lights", "on", {"message": "Glamo WW"})
+    await hass.async_block_till_done()
+    first = vendor.states["hub"]["pattern"]["id"]
+    hass.states.async_set("calendar.lights", "on", {"message": " Christmas "})
+    await hass.async_block_till_done()
+    second = vendor.states["hub"]["pattern"]["id"]
+    hass.states.async_set("calendar.lights", "off", {"message": ""})
+    await hass.async_block_till_done()
+    # Then each event's pattern plays locally and the lights go off at the end.
+    assert (first, second) == ("ww", "xmas")
+    assert vendor.states["hub"]["onState"] is False
+    assert {write[0] for write in vendor.writes} == {"local"}

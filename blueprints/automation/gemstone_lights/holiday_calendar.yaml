@@ -1,0 +1,65 @@
+blueprint:
+  name: Gemstone holiday calendar
+  description: >-
+    Play a saved pattern, design or library pattern while a calendar event is
+    on. Name each event after what should play, for example "Glamo WW" or
+    "Christmas Chase", in a calendar used only for the lights (a Local Calendar
+    works offline). When the event ends the lights switch off, or keep showing
+    the last pattern. Reconciles after HA starts. HA must stay running.
+  domain: automation
+  input:
+    calendar:
+      name: Calendar
+      selector:
+        entity:
+          domain: calendar
+    controllers:
+      name: Controllers
+      description: One or more Gemstone controller lights.
+      selector:
+        entity:
+          integration: gemstone_lights
+          domain: light
+          multiple: true
+    at_end:
+      name: When an event ends
+      default: turn_off
+      selector:
+        select:
+          options:
+            - label: Switch the lights off
+              value: turn_off
+            - label: Keep the last pattern
+              value: keep
+mode: restart
+variables:
+  calendar_entity: !input calendar
+  at_end: !input at_end
+triggers:
+  - trigger: state
+    entity_id: !input calendar
+    to: ["on", "off"]
+  - trigger: state
+    entity_id: !input calendar
+    attribute: message
+  - trigger: homeassistant
+    event: start
+conditions:
+  - condition: template
+    value_template: "{{ states(calendar_entity) in ['on', 'off'] }}"
+actions:
+  - choose:
+      - conditions: >-
+          {{ is_state(calendar_entity, 'on')
+             and (state_attr(calendar_entity, 'message') or '') | trim != '' }}
+        sequence:
+          - action: gemstone_lights.play_by_name
+            target:
+              entity_id: !input controllers
+            data:
+              name: "{{ state_attr(calendar_entity, 'message') | trim }}"
+      - conditions: "{{ is_state(calendar_entity, 'off') and at_end == 'turn_off' }}"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input controllers
