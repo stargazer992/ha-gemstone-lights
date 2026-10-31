@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1
+
+- Resend a command once when the controller does not answer within the
+  timeout, so an occasional hub stall no longer fails an on/off or colour
+  change.
+
 ## 2.1.0
 
 - Add the `play_by_name` action: plays a saved design, saved pattern or
