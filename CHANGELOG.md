@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.2.0
+
+- Effects chosen in Home Assistant now send each animation's own fields:
+  direction only where the animation takes one, background colour only where
+  it draws one, and default extra settings (e.g. Fireworks count, Accent
+  on/off lengths) so the firmware no longer reuses stale values.
+- Resend a command or status read once when the controller answers 503 (busy).
+- Seed each light's colour-picker favourites with the Gemstone app's swatches,
+  translating the three whites and LED-tuned orange, yellow and pink to and
+  from the values the app sends. Existing favourites are left alone.
+- Effect speed starts at 1, the controller's minimum.
+- Add `tools/gemstone_sim.py`, a fake Hub2 controller with fault injection.
+
 ## 2.1.1
 
 - Resend a command once when the controller does not answer within the

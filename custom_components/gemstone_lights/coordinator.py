@@ -24,6 +24,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .animations import apply_animation
 from .api import GemstoneApi, GemstoneError
 from .bluetooth_api import GemstoneBluetoothApi, GemstoneBluetoothCommandError
 from .catalog import LocalCatalog
@@ -546,7 +547,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
 
     def set_speed(self, device_id: str, value: int) -> None:
         """Remember the desired animation speed."""
-        self._speeds[device_id] = max(0, min(255, int(value)))
+        self._speeds[device_id] = max(1, min(255, int(value)))
 
     @serialized
     async def async_set_speed(self, device_id: str, value: int) -> None:
@@ -574,16 +575,16 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         The controller plays any well-formed pattern, saved or not, which is
         what makes free-form effect selection possible.
         """
-        return {
-            "id": str(uuid.uuid4()),
-            "name": name or animation.replace("_", " ").title(),
-            "colors": colors or [0xFFFFFF],
-            "animation": "motionless" if animation == EFFECT_SOLID else animation,
-            "speed": self.speed(device_id),
-            "brightness": max(1, min(255, brightness)),
-            "direction": 0,
-            "backgroundColor": 0,
-        }
+        return apply_animation(
+            {
+                "id": str(uuid.uuid4()),
+                "name": name or animation.replace("_", " ").title(),
+                "colors": colors or [0xFFFFFF],
+                "speed": self.speed(device_id),
+                "brightness": max(1, min(255, brightness)),
+            },
+            "motionless" if animation == EFFECT_SOLID else animation,
+        )
 
     # -- commands -----------------------------------------------------------
 

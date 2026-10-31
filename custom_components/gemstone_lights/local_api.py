@@ -18,6 +18,7 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    LOCAL_BUSY_RETRY_DELAY,
     LOCAL_COMMAND_ATTEMPTS,
     LOCAL_MAX_PAYLOAD,
     LOCAL_ORIGIN,
@@ -51,21 +52,31 @@ class GemstoneLocalApi:
     async def _get(self, path: str) -> dict[str, Any]:
         url = f"http://{self._host}{path}"
         try:
-            async with self._session.get(
-                url,
-                headers={"Connection": "close"},
-                timeout=aiohttp.ClientTimeout(total=LOCAL_TIMEOUT),
-            ) as resp:
-                if resp.status >= 400:
-                    raise GemstoneLocalError(f"GET {path} returned {resp.status}")
-                body = json.loads(await resp.text())
-                if not isinstance(body, dict):
-                    raise GemstoneLocalError(f"GET {path} returned an invalid object")
-                return body
+            for attempt in range(2):
+                async with self._session.get(
+                    url,
+                    headers={"Connection": "close"},
+                    timeout=aiohttp.ClientTimeout(total=LOCAL_TIMEOUT),
+                ) as resp:
+                    if resp.status == 503 and attempt == 0:
+                        _LOGGER.debug(
+                            "Gemstone %s busy, retrying GET %s", self._host, path
+                        )
+                        await asyncio.sleep(LOCAL_BUSY_RETRY_DELAY)
+                        continue
+                    if resp.status >= 400:
+                        raise GemstoneLocalError(f"GET {path} returned {resp.status}")
+                    body = json.loads(await resp.text())
+                    if not isinstance(body, dict):
+                        raise GemstoneLocalError(
+                            f"GET {path} returned an invalid object"
+                        )
+                    return body
         except (TimeoutError, asyncio.TimeoutError) as err:
             raise GemstoneLocalError(f"Timeout on GET {path}") from err
         except (aiohttp.ClientError, ValueError) as err:
             raise GemstoneLocalError(f"GET {path} failed: {err}") from err
+        raise AssertionError("unreachable")
 
     async def async_get_state(self) -> dict[str, Any]:
         """Return the controller's ``currentlyPlaying`` object."""
@@ -111,9 +122,10 @@ class GemstoneLocalApi:
             raise GemstoneLocalError("Payload exceeds the controller's 15 KiB limit")
 
         url = f"http://{self._host}/device-control/play"
-        # Hubs occasionally stall for one request; every command sets a full
-        # state, so sending it again after a timeout is harmless.
+        # Hubs occasionally stall for one request or answer 503 (busy); every
+        # command sets a full state, so sending it again is harmless.
         for attempt in range(LOCAL_COMMAND_ATTEMPTS):
+            last = attempt + 1 == LOCAL_COMMAND_ATTEMPTS
             try:
                 async with self._session.post(
                     url,
@@ -121,6 +133,10 @@ class GemstoneLocalApi:
                     headers={"Content-Type": "application/json", "Connection": "close"},
                     timeout=aiohttp.ClientTimeout(total=LOCAL_TIMEOUT),
                 ) as resp:
+                    if resp.status == 503 and not last:
+                        _LOGGER.debug("Gemstone %s: busy, resending", self._host)
+                        await asyncio.sleep(LOCAL_BUSY_RETRY_DELAY)
+                        continue
                     if resp.status >= 400:
                         text = await resp.text()
                         raise GemstoneLocalError(
@@ -131,7 +147,7 @@ class GemstoneLocalApi:
                     await resp.read()
                     return
             except (TimeoutError, asyncio.TimeoutError) as err:
-                if attempt + 1 == LOCAL_COMMAND_ATTEMPTS:
+                if last:
                     raise GemstoneLocalError("Timeout sending command") from err
                 _LOGGER.debug("Gemstone %s: command timed out, resending", self._host)
             except aiohttp.ClientError as err:

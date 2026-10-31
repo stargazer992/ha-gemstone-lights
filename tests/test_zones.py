@@ -154,7 +154,12 @@ async def test_local_zones_keep_independent_brightness_after_echo(coordinator, v
         {"lights": [13, 14, 15], "color": 3355443200},
     ]
     assert GemstoneZoneLight(coordinator, "hub", "front").brightness == 80
-    assert GemstoneZoneLight(coordinator, "hub", "back").rgbw_color == (0, 0, 0, 255)
+    assert GemstoneZoneLight(coordinator, "hub", "back").rgbw_color == (
+        253,
+        244,
+        188,
+        0,
+    )  # Warm White swatch
     assert GemstoneZoneLight(coordinator, "hub", "back").brightness == 200
 
 
