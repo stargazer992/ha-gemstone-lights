@@ -17,7 +17,12 @@ from typing import Any
 
 import aiohttp
 
-from .const import LOCAL_MAX_PAYLOAD, LOCAL_ORIGIN, LOCAL_TIMEOUT
+from .const import (
+    LOCAL_COMMAND_ATTEMPTS,
+    LOCAL_MAX_PAYLOAD,
+    LOCAL_ORIGIN,
+    LOCAL_TIMEOUT,
+)
 from .validation import validate_state
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,24 +111,31 @@ class GemstoneLocalApi:
             raise GemstoneLocalError("Payload exceeds the controller's 15 KiB limit")
 
         url = f"http://{self._host}/device-control/play"
-        try:
-            async with self._session.post(
-                url,
-                data=encoded,
-                headers={"Content-Type": "application/json", "Connection": "close"},
-                timeout=aiohttp.ClientTimeout(total=LOCAL_TIMEOUT),
-            ) as resp:
-                if resp.status >= 400:
-                    text = await resp.text()
-                    raise GemstoneLocalError(
-                        f"POST /device-control/play returned {resp.status}: {text[:160]}"
-                    )
-                # The controller may reply with an empty or non-JSON body.
-                await resp.read()
-        except (TimeoutError, asyncio.TimeoutError) as err:
-            raise GemstoneLocalError("Timeout sending command") from err
-        except aiohttp.ClientError as err:
-            raise GemstoneLocalError(f"Error sending command: {err}") from err
+        # Hubs occasionally stall for one request; every command sets a full
+        # state, so sending it again after a timeout is harmless.
+        for attempt in range(LOCAL_COMMAND_ATTEMPTS):
+            try:
+                async with self._session.post(
+                    url,
+                    data=encoded,
+                    headers={"Content-Type": "application/json", "Connection": "close"},
+                    timeout=aiohttp.ClientTimeout(total=LOCAL_TIMEOUT),
+                ) as resp:
+                    if resp.status >= 400:
+                        text = await resp.text()
+                        raise GemstoneLocalError(
+                            f"POST /device-control/play returned {resp.status}: "
+                            f"{text[:160]}"
+                        )
+                    # The controller may reply with an empty or non-JSON body.
+                    await resp.read()
+                    return
+            except (TimeoutError, asyncio.TimeoutError) as err:
+                if attempt + 1 == LOCAL_COMMAND_ATTEMPTS:
+                    raise GemstoneLocalError("Timeout sending command") from err
+                _LOGGER.debug("Gemstone %s: command timed out, resending", self._host)
+            except aiohttp.ClientError as err:
+                raise GemstoneLocalError(f"Error sending command: {err}") from err
 
     async def async_set_power(self, on: bool) -> None:
         """Turn the lights on or off, keeping the current content."""

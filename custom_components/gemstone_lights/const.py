@@ -105,6 +105,7 @@ CONF_HOST: Final = "host"
 CONF_HOST_DEVICE: Final = "host_device_id"
 CONF_ENABLE_LOCAL: Final = "enable_local"
 LOCAL_TIMEOUT: Final = 8
+LOCAL_COMMAND_ATTEMPTS: Final = 2  # a timed-out command is sent once more
 # Consecutive failed polls before a controller is shown unavailable; hubs
 # occasionally miss a single read.
 LOCAL_MISSED_POLLS: Final = 3

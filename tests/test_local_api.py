@@ -2,9 +2,13 @@
 
 import json
 
+import pytest
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.gemstone_lights.local_api import GemstoneLocalApi
+from custom_components.gemstone_lights.local_api import (
+    GemstoneLocalApi,
+    GemstoneLocalError,
+)
 
 
 async def test_power_off_preserves_playing_content(hass, http):
@@ -42,3 +46,30 @@ async def test_color_replaces_other_modes(hass, http):
         "impulse": None,
         "playlist": None,
     }
+
+
+async def test_timed_out_command_is_sent_once_more(hass, http):
+    # Given a controller that stalls on the first command and answers the next.
+    client = GemstoneLocalApi(async_get_clientsession(hass), "192.0.2.10")
+    url = "http://192.0.2.10/device-control/play"
+    http.post(url, exception=TimeoutError())
+    http.post(url, status=200)
+
+    # When power is switched off.
+    await client.async_set_power(False)
+
+    # Then the command was resent and succeeded.
+    assert len(next(iter(http.requests.values()))) == 2
+
+
+async def test_command_fails_after_two_timeouts(hass, http):
+    # Given a controller that does not answer at all.
+    client = GemstoneLocalApi(async_get_clientsession(hass), "192.0.2.10")
+    url = "http://192.0.2.10/device-control/play"
+    http.post(url, exception=TimeoutError())
+    http.post(url, exception=TimeoutError())
+
+    # When power is switched off, then the timeout is reported.
+    with pytest.raises(GemstoneLocalError, match="Timeout sending command"):
+        await client.async_set_power(False)
+    assert len(next(iter(http.requests.values()))) == 2
