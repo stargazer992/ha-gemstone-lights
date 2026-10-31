@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.1
+
+- The account lists every hearted pattern in each folder, so a favourite
+  showed up once per folder (e.g. "Glamo WW (Christmas)", "Glamo WW (NFL)").
+  The import now keeps each pattern only in the folder it belongs to.
+  Re-import once to clean up existing lists.
+
 ## 2.3.0
 
 - Keep which saved patterns are hearted in the Gemstone app. The Pattern and

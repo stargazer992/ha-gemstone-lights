@@ -17,8 +17,18 @@ def account(vendor):
         {"folderId": "holiday", "name": "Holiday"},
     ]
     vendor.patterns = {
-        "warm": [{"patternData": WARM, "isFavorite": True}],
-        "holiday": [{"patternData": HOLIDAY}],
+        "warm": [
+            {"id": "fav-1", "folderId": "warm", "patternData": WARM, "isFavorite": True}
+        ],
+        "holiday": [
+            {"patternData": HOLIDAY},
+            {
+                "id": "fav-1",
+                "folderId": "warm",
+                "patternData": WARM,
+                "isFavorite": True,
+            },
+        ],
     }
     vendor.library_folders = [
         {"id": "lib", "folderName": "Christmas", "category": "holidays"}
