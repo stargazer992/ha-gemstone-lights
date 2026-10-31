@@ -174,6 +174,18 @@ data:
 
 Unknown pattern names produce an error with suggested matches.
 
+To play a saved design or pattern by name, on one or several controllers at
+once, use `play_by_name`. It looks in saved designs, then saved patterns, then
+the library:
+
+```yaml
+action: gemstone_lights.play_by_name
+target:
+  entity_id: [light.backside, light.front]
+data:
+  name: Glamo WW   # or "Glamo WW (Holiday)" when two share a name
+```
+
 ## Notes and limitations
 
 - **Zone edits preserve neighboring patterns**, including their complete RGBW
