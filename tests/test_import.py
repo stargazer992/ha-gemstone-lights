@@ -17,7 +17,7 @@ def account(vendor):
         {"folderId": "holiday", "name": "Holiday"},
     ]
     vendor.patterns = {
-        "warm": [{"patternData": WARM}],
+        "warm": [{"patternData": WARM, "isFavorite": True}],
         "holiday": [{"patternData": HOLIDAY}],
     }
     vendor.library_folders = [
@@ -68,6 +68,12 @@ async def test_import_keeps_setup_and_favorites_then_never_uses_cloud(
         "xmas-ww",
     ]
     assert coordinator.find_library_pattern("Candy Cane")["animation"] == "chase"
+    pattern_select = next(
+        state
+        for state in hass.states.async_all("select")
+        if "Glamo WW (Warm)" in state.attributes.get("options", [])
+    )
+    assert pattern_select.attributes["favorites"] == ["Glamo WW (Warm)"]
     assert (config_dir / "www" / "gemstones" / "index.json").exists()
     assert {url.host for _, url in http.requests} == {"192.0.2.10"}
     await hass.config_entries.async_unload(entry.entry_id)

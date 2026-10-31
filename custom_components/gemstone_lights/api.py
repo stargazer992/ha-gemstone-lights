@@ -439,6 +439,7 @@ async def async_fetch_account(api: GemstoneApi) -> dict[str, Any]:
                         "folder": folder.get("name") or "",
                         "name": data["name"],
                         "data": data,
+                        "favorite": bool(item.get("isFavorite")),
                     }
                 )
     return {"devices": devices, "patterns": patterns}
