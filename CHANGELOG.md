@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+
+- Add the `play_by_name` action: plays a saved design, saved pattern or
+  library pattern (e.g. "Glamo WW") by name on any number of controllers.
+- Add Response time and Missed polls diagnostic sensors per controller.
+- Add `backup_favorites` and `restore_favorites` actions, storing files in
+  `<config>/gemstone_backups/`.
+- Follow a controller to its new address through DHCP discovery of its
+  `Gemstone-<controller id>` hostname.
+
 ## 2.0.1
 
 - Show a controller as unavailable only after three missed polls in a row
