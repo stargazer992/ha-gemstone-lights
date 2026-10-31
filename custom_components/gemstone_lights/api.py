@@ -428,10 +428,18 @@ async def async_fetch_account(api: GemstoneApi) -> dict[str, Any]:
                 }
             )
     patterns: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for folder in await api.async_get_folders():
         if not (folder_id := folder.get("folderId")):
             continue
         for item in await api.async_get_folder_patterns(folder_id):
+            # Favourites come back in every folder's listing; keep each in its own.
+            if item.get("folderId", folder_id) != folder_id:
+                continue
+            if item_id := item.get("id"):
+                if item_id in seen:
+                    continue
+                seen.add(item_id)
             data = item.get("patternData")
             if isinstance(data, dict) and data.get("name"):
                 patterns.append(
