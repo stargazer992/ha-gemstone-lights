@@ -223,6 +223,30 @@
         }
       }
     },
+    "backup_favorites": {
+      "name": "Back up favorites",
+      "description": "Save this controller's patterns, designs and zones to a file in gemstone_backups in the config folder.",
+      "fields": {
+        "controller": {
+          "name": "Controller",
+          "description": "Select the whole-controller light."
+        }
+      }
+    },
+    "restore_favorites": {
+      "name": "Restore favorites",
+      "description": "Merge a file from gemstone_backups back into this controller's patterns, designs and zones.",
+      "fields": {
+        "controller": {
+          "name": "Controller",
+          "description": "Select the whole-controller light."
+        },
+        "file": {
+          "name": "File",
+          "description": "Backup file name. Leave empty for the newest backup of this controller."
+        }
+      }
+    },
     "save_current": {
       "name": "Save current content",
       "description": "Save the current pattern, solid color or design to the local catalog.",

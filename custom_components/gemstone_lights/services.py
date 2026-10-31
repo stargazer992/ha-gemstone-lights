@@ -2,15 +2,48 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 import voluptuous as vol
 from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import service
+from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .catalog import checked_content
 from .const import DOMAIN
+
+BACKUP_DIR = "gemstone_backups"
+_BACKUP_FILE = re.compile(r"[\w.-]+\.json")
+
+
+def _write_backup(folder: Path, name: str, catalog: dict) -> None:
+    folder.mkdir(exist_ok=True)
+    (folder / name).write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+
+
+def _read_backup(folder: Path, prefix: str, name: str | None) -> dict:
+    if name is None:
+        found = sorted(folder.glob(f"{prefix}-*.json")) if folder.is_dir() else []
+        if not found:
+            raise HomeAssistantError(f"No backup for this controller in {folder}")
+        path = found[-1]
+    elif _BACKUP_FILE.fullmatch(name):
+        path = folder / name
+    else:
+        raise HomeAssistantError(f"Give a file name inside {folder}")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as err:
+        raise HomeAssistantError(f"No backup called {name} in {folder}") from err
+    except ValueError as err:
+        raise HomeAssistantError(f"{path.name} is not a valid backup") from err
+
 
 _KIND = vol.In(["pattern", "design", "zone"])
 
@@ -56,6 +89,29 @@ def register_services(hass):
     async def import_data(call):
         coordinator, device_id = controller(call)
         await coordinator.catalog.import_data(device_id, call.data["catalog"])
+
+    def backup_prefix(coordinator, device_id):
+        name = coordinator.device_info_raw(device_id).get("name") or device_id
+        return slugify(name) or slugify(device_id)
+
+    async def backup(call):
+        coordinator, device_id = controller(call)
+        catalog = coordinator.catalog.export(device_id)
+        stamp = dt_util.now().strftime("%Y%m%d-%H%M%S")
+        name = f"{backup_prefix(coordinator, device_id)}-{stamp}.json"
+        folder = Path(hass.config.path(BACKUP_DIR))
+        await hass.async_add_executor_job(_write_backup, folder, name, catalog)
+        return {"file": name}
+
+    async def restore(call):
+        coordinator, device_id = controller(call)
+        catalog = await hass.async_add_executor_job(
+            _read_backup,
+            Path(hass.config.path(BACKUP_DIR)),
+            backup_prefix(coordinator, device_id),
+            call.data.get("file"),
+        )
+        await coordinator.catalog.import_data(device_id, catalog)
 
     async def snapshot(call):
         coordinator, device_id = controller(call)
@@ -103,6 +159,13 @@ def register_services(hass):
             "import_catalog",
             import_data,
             {vol.Required("catalog"): dict},
+            SupportsResponse.NONE,
+        ),
+        ("backup_favorites", backup, {}, SupportsResponse.OPTIONAL),
+        (
+            "restore_favorites",
+            restore,
+            {vol.Optional("file"): cv.string},
             SupportsResponse.NONE,
         ),
         (
