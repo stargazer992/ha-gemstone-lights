@@ -132,6 +132,12 @@ contains no device addresses or account credentials. Importing content does not 
 another controller. Native animated-zone identity is preserved by a full HA
 backup of the original entry, not by this portable content import alone.
 
+`backup_favorites` takes `controller` and writes the same export to
+`<config>/gemstone_backups/<controller>-<YYYYmmdd-HHMMSS>.json`, returning
+`{"file": ...}`. `restore_favorites` takes `controller` and an optional `file`
+(a name in that folder) and imports it like `import_catalog`; without `file` it
+uses that controller's newest backup.
+
 `play_content` takes `kind: pattern` or `kind: design` and a `content` object,
 using the normal light `target`. Patterns can target a zone; designs must target
 the controller. It plays immediately without saving a catalog item.

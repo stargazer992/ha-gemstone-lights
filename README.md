@@ -44,6 +44,9 @@ Assistant, then follow [Setup](#setup).
   as `Name (Folder)`.
 - **Local editing and backups** - create patterns, designs and static zones; save
   current content; import and export portable catalogs.
+- **Favorites backup** - `backup_favorites` saves a controller's patterns,
+  designs and zones to `<config>/gemstone_backups/`; `restore_favorites` merges
+  the newest (or a named) file back. Home Assistant backups include that folder.
 - **Local automation blueprints** - playlists, weekly schedules and sunset/sunrise.
 - **Local control** - commands go directly to the controller on your network
   and work without an internet connection. The address can be entered manually

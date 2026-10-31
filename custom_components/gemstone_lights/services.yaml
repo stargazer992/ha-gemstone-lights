@@ -151,6 +151,39 @@ import_catalog:
       required: true
       selector:
         object: {}
+backup_favorites:
+  name: Back up favorites
+  description: Save this controller's patterns, designs and zones to a file in
+    gemstone_backups in the Home Assistant config folder. Returns the file name.
+  fields:
+    controller:
+      name: Controller
+      description: Select the whole-controller light.
+      required: true
+      selector:
+        entity:
+          integration: gemstone_lights
+          domain: light
+restore_favorites:
+  name: Restore favorites
+  description: Merge a file from gemstone_backups back into this controller's
+    patterns, designs and zones. Matching names are replaced.
+  fields:
+    controller:
+      name: Controller
+      description: Select the whole-controller light.
+      required: true
+      selector:
+        entity:
+          integration: gemstone_lights
+          domain: light
+    file:
+      name: File
+      description: Backup file name. Leave empty for this controller's newest backup.
+      required: false
+      example: backside-20261231-120000.json
+      selector:
+        text: null
 save_current:
   name: Save current content
   description: Save the current pattern, solid color or design to the local catalog.
