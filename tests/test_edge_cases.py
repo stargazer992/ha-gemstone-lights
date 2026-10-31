@@ -23,7 +23,7 @@ async def test_edge_case_a_offline_restart(hass, entry, loaded_entry, vendor):
     # Then state/brightness survive startup and commands still reach the local controller.
     assert entry.runtime_data is not loaded_entry
     assert restored.state == "on"
-    assert restored.attributes["rgbw_color"] == (0, 0, 0, 255)
+    assert restored.attributes["rgbw_color"] == (253, 244, 188, 0)  # Warm White
     assert restored.attributes["brightness"] == 80
     assert vendor.writes[-1][0] == "local"
     assert not vendor.states["hub"]["onState"]

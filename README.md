@@ -26,7 +26,12 @@ Assistant, then follow [Setup](#setup).
 ## Features
 
 - **Light entity** - on/off, RGB colour, brightness, and all 29 built-in
-  animations exposed as Home Assistant effects.
+  animations exposed as Home Assistant effects. Each effect gets the direction,
+  background colour and extra settings that animation reads.
+- **App colour swatches** - the colour picker's favourites start as the
+  Gemstone app's swatches. Warm White lights only the warm LEDs, Cool White the
+  RGB LEDs and Bright White both; orange, yellow and pink use the app's
+  LED-tuned values.
 - **Zone lights** - separate colour and effect control for each zone configured
   in the Gemstone app. Zone additions and name changes are detected automatically.
 - **Effect speed** - a slider that also re-applies the running effect.
@@ -227,6 +232,11 @@ data:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development, testing and protocol
 references, and [CHANGELOG.md](CHANGELOG.md) for release changes.
+
+`tools/gemstone_sim.py` is a fake Hub2 controller for testing without
+hardware. It serves the local API on a real socket, with a control panel at
+`/_sim` for faults (busy, slow, dropped, power cycle) and colour changes made
+"from the app". Run `python tools/gemstone_sim.py --help` for usage.
 
 ## Disclaimer
 

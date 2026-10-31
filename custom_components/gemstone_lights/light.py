@@ -24,8 +24,10 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
+from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import GemstoneConfigEntry
@@ -33,6 +35,7 @@ from .color_util import pack, unpack
 from .const import EFFECT_LIST, EFFECT_SOLID
 from .coordinator import GemstoneCoordinator
 from .entity import GemstoneEntity
+from .palette import FAVORITE_COLORS, to_controller, to_display
 from .select import labelled
 
 
@@ -100,12 +103,32 @@ class _GemstoneBaseLight(GemstoneEntity, LightEntity):
         super().__init__(coordinator, device_id)
         self._last_rgbw: tuple[int, int, int, int] = (255, 255, 255, 0)
 
+    async def async_added_to_hass(self) -> None:
+        """Seed the colour picker with the Gemstone app's swatches, once.
+
+        Only when the light has no favourites yet, so edits (and an emptied
+        list) are kept.
+        """
+        await super().async_added_to_hass()
+        registry = er.async_get(self.hass)
+        if (entry := registry.async_get(self.entity_id)) is None:
+            return
+        options = entry.options.get(LIGHT_DOMAIN, {})
+        if "favorite_colors" in options:
+            return
+        registry.async_update_entity_options(
+            self.entity_id,
+            LIGHT_DOMAIN,
+            {**options, "favorite_colors": [dict(c) for c in FAVORITE_COLORS]},
+        )
+
     def _resolve(
         self, kwargs: dict[str, Any]
     ) -> tuple[tuple[int, int, int, int], int, str]:
         """Work out the colour, brightness and effect a command should apply."""
         rgbw = kwargs.get(ATTR_RGBW_COLOR) or self.rgbw_color or self._last_rgbw
         self._last_rgbw = tuple(rgbw)
+        rgbw = to_controller(tuple(rgbw))
         brightness = kwargs.get(ATTR_BRIGHTNESS) or self.brightness or 255
         effect = kwargs.get(ATTR_EFFECT) or self.effect or EFFECT_SOLID
         return tuple(rgbw), int(brightness), effect
@@ -206,8 +229,8 @@ class GemstoneLight(_GemstoneBaseLight):
         """Return the current colour."""
         if pattern := self._pattern:
             colors = pattern.get("colors") or []
-            return unpack(colors[0]) if colors else None
-        return unpack(self._color_value)
+            return to_display(unpack(colors[0])) if colors else None
+        return to_display(unpack(self._color_value))
 
     @property
     def brightness(self) -> int | None:
@@ -323,7 +346,7 @@ class GemstoneZoneLight(_GemstoneBaseLight):
     def rgbw_color(self) -> tuple[int, int, int, int] | None:
         """Return this zone's colour."""
         if zone := self._zone:
-            return unpack(zone.get("color"))
+            return to_display(unpack(zone.get("color")))
         return None
 
     @property

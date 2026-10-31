@@ -13,6 +13,7 @@ from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .animations import apply_animation
 from .commands import serialized
 from .const import EFFECT_SOLID
 from .geometry import decode_lights
@@ -289,10 +290,11 @@ class ZoneMixin:
             if "brightness" in spec:
                 pattern["brightness"] = spec["brightness"]
             if "animation" in spec:
-                pattern["animation"] = (
+                apply_animation(
+                    pattern,
                     "motionless"
                     if spec["animation"] == EFFECT_SOLID
-                    else spec["animation"]
+                    else spec["animation"],
                 )
             desired[zone_id] = entry
         await self._async_play_zones(device_id, desired)
