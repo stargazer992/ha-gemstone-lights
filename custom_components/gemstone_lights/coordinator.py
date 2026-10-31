@@ -108,6 +108,8 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         self._local: dict[str, GemstoneLocalApi | GemstoneBluetoothApi] = {}
         self._local_ok: dict[str, bool] = {}
         self._missed_polls: dict[str, int] = {}
+        self._missed_total: dict[str, int] = {}
+        self._response_ms: dict[str, float | None] = {}
         self._settings: dict[str, dict[str, Any]] = {}
         # Opt-in cloud access: which controllers were last read via the cloud.
         self._via_cloud: dict[str, bool] = {}
@@ -317,6 +319,14 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         """Return how many library patterns are loaded."""
         return self.library.size()
 
+    def health(self, device_id: str) -> dict[str, Any]:
+        """Return poll health since Home Assistant started."""
+        return {
+            "response_ms": self._response_ms.get(device_id),
+            "missed_polls": self._missed_total.get(device_id, 0),
+            "consecutive_missed": self._missed_polls.get(device_id, 0),
+        }
+
     def settings(self, device_id: str) -> dict[str, Any]:
         """Return hub settings read from the controller."""
         return self._settings.get(device_id, {})
@@ -413,8 +423,11 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
                 raise GemstoneLocalError(
                     "No LAN or Bluetooth address is configured for this controller"
                 )
+            started = monotonic()
             state = await client.async_get_state()
+            self._response_ms[device_id] = (monotonic() - started) * 1000
         except GemstoneLocalError as err:
+            self._response_ms[device_id] = None
             self._local_ok[device_id] = False
             if self.api is None:
                 raise GemstoneError(str(err)) from err
@@ -448,6 +461,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         except GemstoneError as err:
             missed = self._missed_polls.get(device_id, 0) + 1
             self._missed_polls[device_id] = missed
+            self._missed_total[device_id] = self._missed_total.get(device_id, 0) + 1
             state = self.device_state(device_id)
             available = bool(state) and missed < LOCAL_MISSED_POLLS
             if missed == LOCAL_MISSED_POLLS:

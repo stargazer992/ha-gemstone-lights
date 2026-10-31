@@ -85,6 +85,12 @@
     "sensor": {
       "now_playing": {
         "name": "Now playing"
+      },
+      "response_time": {
+        "name": "Response time"
+      },
+      "missed_polls": {
+        "name": "Missed polls"
       }
     },
     "number": {

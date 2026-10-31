@@ -17,6 +17,8 @@ async def test_imported_controller_gets_every_platform(hass, loaded_entry):
         "hub_light",
         "hub_speed",
         "hub_now_playing",
+        "hub_response_time",
+        "hub_missed_polls",
         "hub_design",
         "hub_pattern",
         "hub_library_folder",

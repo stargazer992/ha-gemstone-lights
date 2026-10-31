@@ -37,6 +37,8 @@ Assistant, then follow [Setup](#setup).
   `play_library_pattern` action in automations.
 - **Now playing sensor** - current controller state, firmware, output names
   and local IP.
+- **Health sensors** - *Response time* of the last status read and *Missed
+  polls* since Home Assistant started, to spot an unreliable controller.
 - Optional one-time account import of controller setup, zones, designs and
   saved patterns. Patterns with the same name in different folders are listed
   as `Name (Folder)`.
