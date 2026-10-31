@@ -148,9 +148,9 @@ HA's `.storage/gemstone_lights.<entry_id>` backup; the library is in
 
 Import these blueprint URLs using HA's blueprint import interface:
 
-- [Local playlist script](https://github.com/xagon0/ha-gemstone-lights/blob/main/blueprints/script/gemstone_lights/local_playlist.yaml)
-- [Weekly schedule automation](https://github.com/xagon0/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_schedule.yaml)
-- [Sunset-to-sunrise automation](https://github.com/xagon0/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_sun.yaml)
+- [Local playlist script](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/script/gemstone_lights/local_playlist.yaml)
+- [Weekly schedule automation](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_schedule.yaml)
+- [Sunset-to-sunrise automation](https://github.com/stargazer992/ha-gemstone-lights/blob/main/blueprints/automation/gemstone_lights/local_sun.yaml)
 
 For an offline installation, copy the files from this repository's `blueprints`
 folder into HA's corresponding `blueprints/script` or `blueprints/automation`

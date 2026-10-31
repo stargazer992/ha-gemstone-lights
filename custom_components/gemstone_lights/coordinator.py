@@ -42,6 +42,7 @@ from .const import (
     DEFAULT_SPEED,
     DOMAIN,
     EFFECT_SOLID,
+    LOCAL_MISSED_POLLS,
     LOCAL_WRITE_GAP,
 )
 from .library import INDEX, PatternLibrary, library_path, write_library
@@ -106,6 +107,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         self._refresh_cancel: dict[str, Any] = {}
         self._local: dict[str, GemstoneLocalApi | GemstoneBluetoothApi] = {}
         self._local_ok: dict[str, bool] = {}
+        self._missed_polls: dict[str, int] = {}
         self._settings: dict[str, dict[str, Any]] = {}
         # Opt-in cloud access: which controllers were last read via the cloud.
         self._via_cloud: dict[str, bool] = {}
@@ -413,13 +415,13 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
                 )
             state = await client.async_get_state()
         except GemstoneLocalError as err:
-            if self._local_ok.get(device_id) is not False:
-                _LOGGER.warning(
-                    "Gemstone %s: controller unavailable (%s)", device_id, err
-                )
             self._local_ok[device_id] = False
             if self.api is None:
                 raise GemstoneError(str(err)) from err
+            if not self._via_cloud.get(device_id):
+                _LOGGER.warning(
+                    "Gemstone %s: controller unavailable locally (%s)", device_id, err
+                )
             state = await self.api.async_get_state(device_id)
             self._via_cloud[device_id] = True
             return state
@@ -444,10 +446,21 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         try:
             state = await self._async_state_for(device_id, device)
         except GemstoneError as err:
-            _LOGGER.debug("State fetch failed for %s: %s", device_id, err)
+            missed = self._missed_polls.get(device_id, 0) + 1
+            self._missed_polls[device_id] = missed
             state = self.device_state(device_id)
-            available = False
+            available = bool(state) and missed < LOCAL_MISSED_POLLS
+            if missed == LOCAL_MISSED_POLLS:
+                _LOGGER.warning(
+                    "Gemstone %s: controller unavailable after %d missed polls (%s)",
+                    device_id,
+                    missed,
+                    err,
+                )
+            else:
+                _LOGGER.debug("State fetch failed for %s: %s", device_id, err)
         else:
+            self._missed_polls.pop(device_id, None)
             pending = self._pending_states.get(device_id)
             if pending and monotonic() < pending[0]:
                 state = deepcopy(pending[1])
@@ -577,6 +590,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             self._publish_command(device_id, state, cloud_state)
             return
         self._local_ok[device_id] = True
+        self._missed_polls.pop(device_id, None)
         self._via_cloud[device_id] = False
         self._last_write[device_id] = monotonic()
         self._publish_command(device_id, state, wire_state)

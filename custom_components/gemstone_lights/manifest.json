@@ -2,18 +2,18 @@
   "domain": "gemstone_lights",
   "name": "Gemstone Lights",
   "codeowners": [
-    "@xagon0"
+    "@stargazer992"
   ],
   "config_flow": true,
   "dependencies": [
     "bluetooth_adapters"
   ],
-  "documentation": "https://github.com/xagon0/ha-gemstone-lights",
+  "documentation": "https://github.com/stargazer992/ha-gemstone-lights",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/xagon0/ha-gemstone-lights/issues",
+  "issue_tracker": "https://github.com/stargazer992/ha-gemstone-lights/issues",
   "requirements": [
     "pycognito==2024.5.1"
   ],
-  "version": "2.0.0"
+  "version": "2.0.1"
 }
