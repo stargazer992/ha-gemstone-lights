@@ -45,8 +45,10 @@ integrations. A working local clock matters for schedules after a power outage.
 2. Add Gemstone Lights in HA and choose **Local controller (no account or internet)**.
 3. Enter its IPv4 address or hostname and a name. No email, password, token,
    Cognito login, cloud discovery, or library request is used.
-4. Reserve the controller's address in the router. Use the integration options
-   to change the address later; the existing entity identities stay unchanged.
+4. Reserve the controller's address in the router if you can. Address changes
+   are followed automatically through HA's DHCP discovery (hostname
+   `Gemstone-h2-<controller id>`); the integration options can also change it.
+   The existing entity identities stay unchanged.
 
 Account entries from earlier versions are converted on upgrade: credentials are
 removed, entity IDs and cached controllers, zones, designs and saved patterns

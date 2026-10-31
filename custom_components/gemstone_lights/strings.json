@@ -64,7 +64,8 @@
     },
     "abort": {
       "already_configured": "This controller is already configured.",
-      "no_new_controllers": "Every controller on this account is already configured."
+      "no_new_controllers": "Every controller on this account is already configured.",
+      "not_configured": "This Gemstone controller is not set up in Home Assistant."
     }
   },
   "entity": {

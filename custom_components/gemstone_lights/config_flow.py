@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
 from .api import (
     GemstoneApi,
@@ -113,6 +114,48 @@ class GemstoneConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(
             step_id="user", menu_options=["local", "bluetooth", "cloud"]
         )
+
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
+        """Follow a configured controller to the address its router handed out."""
+        wanted = discovery_info.hostname.lower().removeprefix("gemstone-")
+        host = discovery_info.ip
+        for entry in self._async_current_entries(include_ignore=False):
+            coordinator = getattr(entry, "runtime_data", None)
+            local = entry.data.get(CONF_LOCAL_DEVICE) or {}
+            ids = list(coordinator.device_ids) if coordinator else []
+            ids += [local["id"]] if local.get("id") else []
+            device_id = next((i for i in ids if i.lower() == wanted), None)
+            if device_id is None:
+                continue
+            if coordinator and device_id in coordinator.device_ids:
+                old = await coordinator.async_follow_address(device_id, host)
+            else:
+                old = entry.data.get(CONF_HOST)
+                old = old if old != host else None
+            if old is not None:
+                self._async_store_address(entry, device_id, old, host)
+            return self.async_abort(reason="already_configured")
+        return self.async_abort(reason="not_configured")
+
+    @callback
+    def _async_store_address(
+        self, entry: ConfigEntry, device_id: str, old: str, host: str
+    ) -> None:
+        """Replace the old address wherever the entry keeps it."""
+        data, options = dict(entry.data), dict(entry.options)
+        local = data.get(CONF_LOCAL_DEVICE)
+        if isinstance(local, dict) and local.get("id") == device_id:
+            hub = {**(local.get("hub") or {}), "localIp": host}
+            data[CONF_LOCAL_DEVICE] = {**local, "hub": hub}
+        for stored in (data, options):
+            if stored.get(CONF_HOST) == old:
+                stored[CONF_HOST] = host
+        if data != entry.data or options != entry.options:
+            self.hass.config_entries.async_update_entry(
+                entry, data=data, options=options
+            )
 
     async def async_step_local(
         self, user_input: dict[str, Any] | None = None
