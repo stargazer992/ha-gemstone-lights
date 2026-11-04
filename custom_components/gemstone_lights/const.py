@@ -35,6 +35,12 @@ CONF_PASSWORD: Final = "password"
 CONF_IMPORT: Final = "import"
 # Opt-in: keep credentials and fall back to the cloud when the LAN fails.
 CONF_CLOUD_ACCESS: Final = "cloud_access"
+CONF_LOCAL_RECOVERY: Final = "local_recovery"
+# A controller that refuses LAN connections this long (while still on the
+# network) gets Allow Local Commands switched off and on through the account.
+LOCAL_RECOVERY_AFTER: Final = 300
+LOCAL_RECOVERY_GAP: Final = 3600
+LOCAL_RECOVERY_TOGGLE_DELAY: Final = 5
 
 DEFAULT_SCAN_INTERVAL: Final = timedelta(seconds=30)
 

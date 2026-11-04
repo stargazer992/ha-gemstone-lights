@@ -106,11 +106,19 @@ Copy `custom_components/gemstone_lights` into your Home Assistant
   import again to add another controller. If the imported address does not
   answer, setup asks for it.
 
-**Configure** offers three steps:
+**Configure** offers four steps:
 
 - **Controller connection**: LAN address override or Bluetooth address.
 - **Re-import from Gemstone account**: sign in once to refresh the controller's
   setup, zones, designs, saved patterns and the library. The password is not kept.
+- **Local recovery** (off by default): some controllers stop answering on the
+  LAN while staying on Wi-Fi, until Allow Local Commands is switched off and on
+  in the Gemstone app. With this on, your Gemstone credentials are stored and
+  used only for that: after 5 minutes of refused LAN connections, the
+  integration switches Allow Local Commands off and on through the account, at
+  most once an hour per controller. Timeouts never trigger it. The Missed polls
+  sensor's `local_restarts` attribute counts restarts. Turning it off deletes
+  the credentials unless Cloud access is on.
 - **Cloud access** (off by default): stores your Gemstone credentials so commands
   and state reads fall back to the cloud when the controller does not answer
   locally, and enables the `soft_reboot` action. Turning it off deletes the

@@ -22,6 +22,7 @@ from .const import (
     CONF_HOST_DEVICE,
     CONF_LOCAL_DEVICE,
     CONF_LOCAL_ONLY,
+    CONF_LOCAL_RECOVERY,
     CONF_PASSWORD,
     DOMAIN,
 )
@@ -95,10 +96,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: GemstoneConfigEntry) -> 
             entry.options[CONF_EMAIL],
             entry.options[CONF_PASSWORD],
         )
+    recovery_api = api
+    if (
+        recovery_api is None
+        and entry.options.get(CONF_LOCAL_RECOVERY)
+        and CONF_PASSWORD in entry.options
+    ):
+        recovery_api = GemstoneApi(
+            hass,
+            async_get_clientsession(hass),
+            entry.options[CONF_EMAIL],
+            entry.options[CONF_PASSWORD],
+        )
     coordinator = GemstoneCoordinator(
         hass,
         entry,
         api=api,
+        recovery_api=recovery_api if entry.options.get(CONF_LOCAL_RECOVERY) else None,
         bluetooth_address=entry.options.get(
             CONF_BLUETOOTH_ADDRESS, entry.data.get(CONF_BLUETOOTH_ADDRESS)
         ),

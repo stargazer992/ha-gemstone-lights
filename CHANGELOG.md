@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.0
+
+- New **Local recovery** option (Configure → Local recovery, off by default).
+  Some controllers stop answering on port 80 while staying on Wi-Fi; switching
+  Allow Local Commands off and on in the Gemstone app brings them back. With
+  the option on, the integration does that itself through your Gemstone
+  account after 5 minutes of refused LAN connections, at most once an hour per
+  controller. Timeouts (controller off or out of Wi-Fi range) never trigger it,
+  and nothing else uses the cloud. The Missed polls sensor's `local_restarts`
+  attribute counts the restarts.
+
 ## 2.3.1
 
 - The account lists every hearted pattern in each folder, so a favourite
