@@ -35,6 +35,11 @@ _MODES = ("colorB", "pattern", "architectural", "impulse", "playlist")
 class GemstoneLocalError(Exception):
     """Raised when the controller cannot be reached or refuses a request."""
 
+    def __init__(self, message: str, *, refused: bool = False) -> None:
+        """Mark errors where the controller is up but its HTTP port is closed."""
+        super().__init__(message)
+        self.refused = refused
+
 
 class GemstoneLocalApi:
     """Talks to a Hub2 directly over the LAN."""
@@ -74,6 +79,11 @@ class GemstoneLocalApi:
                     return body
         except (TimeoutError, asyncio.TimeoutError) as err:
             raise GemstoneLocalError(f"Timeout on GET {path}") from err
+        except aiohttp.ClientConnectorError as err:
+            raise GemstoneLocalError(
+                f"GET {path} failed: {err}",
+                refused=isinstance(err.os_error, ConnectionRefusedError),
+            ) from err
         except (aiohttp.ClientError, ValueError) as err:
             raise GemstoneLocalError(f"GET {path} failed: {err}") from err
         raise AssertionError("unreachable")

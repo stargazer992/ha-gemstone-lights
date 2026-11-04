@@ -39,6 +39,7 @@ from .const import (
     CONF_IMPORT,
     CONF_LOCAL_DEVICE,
     CONF_LOCAL_ONLY,
+    CONF_LOCAL_RECOVERY,
     CONF_PASSWORD,
     DOMAIN,
 )
@@ -491,7 +492,8 @@ class GemstoneOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Choose what to change."""
         return self.async_show_menu(
-            step_id="init", menu_options=["connection", "reimport", "cloud"]
+            step_id="init",
+            menu_options=["connection", "reimport", "recovery", "cloud"],
         )
 
     async def async_step_connection(
@@ -630,6 +632,11 @@ class GemstoneOptionsFlow(OptionsFlow):
         }
         if user_input is not None:
             if not user_input.get(CONF_CLOUD_ACCESS):
+                if options.get(CONF_LOCAL_RECOVERY):
+                    options[CONF_EMAIL] = self.config_entry.options.get(CONF_EMAIL)
+                    options[CONF_PASSWORD] = self.config_entry.options.get(
+                        CONF_PASSWORD
+                    )
                 return self.async_create_entry(data=options)
             stored = self.config_entry.options
             email = (user_input.get(CONF_EMAIL) or stored.get(CONF_EMAIL) or "").strip()
@@ -666,6 +673,55 @@ class GemstoneOptionsFlow(OptionsFlow):
                         CONF_EMAIL,
                         default=self.config_entry.options.get(CONF_EMAIL, ""),
                     ): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                }
+            ),
+        )
+
+    async def async_step_recovery(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Opt in to restarting local control through the account when it stops."""
+        errors: dict[str, str] = {}
+        stored = self.config_entry.options
+        options = {k: v for k, v in stored.items() if k != CONF_LOCAL_RECOVERY}
+        if user_input is not None:
+            if not user_input.get(CONF_LOCAL_RECOVERY):
+                if not stored.get(CONF_CLOUD_ACCESS):
+                    options.pop(CONF_EMAIL, None)
+                    options.pop(CONF_PASSWORD, None)
+                return self.async_create_entry(data=options)
+            email = (user_input.get(CONF_EMAIL) or stored.get(CONF_EMAIL) or "").strip()
+            password = user_input.get(CONF_PASSWORD) or stored.get(CONF_PASSWORD) or ""
+            api = self._api({CONF_EMAIL: email, CONF_PASSWORD: password})
+            try:
+                await api.async_login()
+                await api.async_get_homegroups()
+            except GemstoneAuthError:
+                errors["base"] = "invalid_auth"
+            except GemstoneRejectedError:
+                errors["base"] = "cloud_rejected"
+            except GemstoneError:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_create_entry(
+                    data={
+                        **options,
+                        CONF_LOCAL_RECOVERY: True,
+                        CONF_EMAIL: email,
+                        CONF_PASSWORD: password,
+                    }
+                )
+        return self.async_show_form(
+            step_id="recovery",
+            errors=errors,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_LOCAL_RECOVERY,
+                        default=stored.get(CONF_LOCAL_RECOVERY, False),
+                    ): bool,
+                    vol.Optional(CONF_EMAIL, default=stored.get(CONF_EMAIL, "")): str,
                     vol.Optional(CONF_PASSWORD): str,
                 }
             ),

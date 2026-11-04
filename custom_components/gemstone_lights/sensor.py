@@ -136,9 +136,9 @@ class GemstoneMissedPolls(GemstoneEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose the current run of consecutive misses."""
+        """Expose the current run of consecutive misses and local restarts."""
+        health = self.coordinator.health(self._device_id)
         return {
-            "consecutive": self.coordinator.health(self._device_id)[
-                "consecutive_missed"
-            ]
+            "consecutive": health["consecutive_missed"],
+            "local_restarts": health["local_restarts"],
         }

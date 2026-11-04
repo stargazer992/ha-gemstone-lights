@@ -107,6 +107,7 @@
         "menu_options": {
           "connection": "Controller connection",
           "reimport": "Re-import from Gemstone account",
+          "recovery": "Local recovery",
           "cloud": "Cloud access"
         }
       },
@@ -125,6 +126,15 @@
         "data": {
           "email": "Email",
           "password": "Password"
+        }
+      },
+      "recovery": {
+        "title": "Local recovery",
+        "description": "Off by default. Some controllers stop answering on the LAN while staying on Wi-Fi. When on, your Gemstone credentials are stored and used only for that case: after 5 minutes of refused LAN connections, Allow Local Commands is switched off and on through the account, at most once an hour per controller. Nothing else uses the cloud. Turning it off deletes the stored credentials unless Cloud access is on.",
+        "data": {
+          "local_recovery": "Restart local control through the Gemstone account",
+          "email": "Email",
+          "password": "Password (leave empty to keep the stored one)"
         }
       },
       "cloud": {

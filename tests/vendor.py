@@ -3,7 +3,9 @@
 import json
 import re
 from copy import deepcopy
+from types import SimpleNamespace
 
+from aiohttp import ClientConnectorError
 from aioresponses import CallbackResult
 
 
@@ -35,6 +37,9 @@ class Vendor:
         self.writes = []
         self.failures = {}
         self.cloud_offline = False
+        # True: the LAN port refuses connections until Allow Local Commands is
+        # switched back on through the account.
+        self.refused = False
         self.echo_writes = True
         self.first_write_started = None
         self.release_first_write = None
@@ -65,6 +70,8 @@ class Vendor:
             body = deepcopy(kwargs["json"])
             self.writes.append(("cloud", device, path, body))
             if path == "/deviceControl/deviceSettings":
+                if body.get("tcpEnabled") is True:
+                    self.refused = False
                 for info in self.devices:
                     if info["id"] == device:
                         info.setdefault("hub", {}).update(body)
@@ -102,6 +109,11 @@ class Vendor:
         return CallbackResult(payload={"data": deepcopy(data)})
 
     async def local(self, url, **kwargs):
+        if self.refused:
+            raise ClientConnectorError(
+                SimpleNamespace(host=url.host, port=80, ssl=None),
+                ConnectionRefusedError(111, "Connect call failed"),
+            )
         if url.path in self.failures:
             return CallbackResult(status=self.failures[url.path])
         device = next(
