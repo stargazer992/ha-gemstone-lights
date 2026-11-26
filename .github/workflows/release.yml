@@ -29,8 +29,12 @@ jobs:
         run: |
           version=$(jq -r .version custom_components/gemstone_lights/manifest.json)
           tag="v$version"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "$tag is already released"
+          if draft=$(gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null); then
+            if [ "$draft" = "true" ]; then
+              gh release edit "$tag" --draft=false
+            else
+              echo "$tag is already released"
+            fi
             exit 0
           fi
           awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {if (f) exit} f' CHANGELOG.md > notes.md
