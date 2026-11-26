@@ -1,0 +1,48 @@
+# Publish a GitHub release for the manifest version once Validate passes on
+# main. HACS only offers versions that have a release.
+name: Release
+
+on:
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - name: Publish the manifest version if it has no release
+        run: |
+          version=$(jq -r .version custom_components/gemstone_lights/manifest.json)
+          tag="v$version"
+          draft=$(gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null || echo none)
+          if [ "$draft" = "false" ]; then
+            echo "$tag is already released"
+            exit 0
+          fi
+          if [ "$draft" = "true" ]; then
+            echo "A draft release for $tag exists; publish or delete it by hand" >&2
+            exit 1
+          fi
+          awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {if (f) exit} f' CHANGELOG.md > notes.md
+          if ! grep -q . notes.md; then
+            echo "CHANGELOG.md has no '## $version' section" >&2
+            exit 1
+          fi
+          newest=$( (gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName -q '.[].tagName'; echo "$tag") | sort -V | tail -n 1)
+          latest=$([ "$newest" = "$tag" ] && echo true || echo false)
+          gh release create "$tag" --title "$tag" --notes-file notes.md --target "$SHA" --latest="$latest"
