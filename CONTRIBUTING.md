@@ -55,6 +55,10 @@ controller-specific address override.
 Keep fixes and their regression tests in separate logical commits. Preserve those
 commits when merging a release PR.
 
+To release, bump `version` in `manifest.json` and add a matching `## <version>`
+section to `CHANGELOG.md`. After Validate passes on main, the Release workflow
+tags `v<version>` and publishes that section as the GitHub release.
+
 ## Protocol references
 
 - [Hub2 API reference](PROTOCOL.md): LAN and cloud requests, colour encoding,
