@@ -41,6 +41,16 @@ CONF_LOCAL_RECOVERY: Final = "local_recovery"
 LOCAL_RECOVERY_AFTER: Final = 300
 LOCAL_RECOVERY_GAP: Final = 3600
 LOCAL_RECOVERY_TOGGLE_DELAY: Final = 5
+# Switching it back on is retried; leaving it off would keep the LAN closed.
+LOCAL_RECOVERY_ENABLE_ATTEMPTS: Final = 3
+LOCAL_RECOVERY_RETRY_DELAY: Final = 20
+# After the restart, the LAN port is checked this often before giving up.
+LOCAL_RECOVERY_VERIFY_ATTEMPTS: Final = 6
+LOCAL_RECOVERY_VERIFY_DELAY: Final = 10
+# A restart that left Allow Local Commands off is tried again this much sooner.
+LOCAL_RECOVERY_LEFT_OFF_RETRY: Final = 600
+# Fired after every local restart with the result.
+EVENT_LOCAL_RESTART: Final = "gemstone_lights_local_restart"
 
 DEFAULT_SCAN_INTERVAL: Final = timedelta(seconds=30)
 
@@ -125,3 +135,5 @@ LOCAL_ORIGIN: Final = "control4"
 LOCAL_WRITE_GAP: Final = 1.5
 DATA_LOCAL: Final = "local"
 DATA_SETTINGS: Final = "settings"
+# Hub settings rarely change: read them on connect and then hourly.
+SETTINGS_REFRESH: Final = 3600

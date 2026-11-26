@@ -116,8 +116,12 @@ Copy `custom_components/gemstone_lights` into your Home Assistant
   in the Gemstone app. With this on, your Gemstone credentials are stored and
   used only for that: after 5 minutes of refused LAN connections, the
   integration switches Allow Local Commands off and on through the account, at
-  most once an hour per controller. Timeouts never trigger it. The Missed polls
-  sensor's `local_restarts` attribute counts restarts. Turning it off deletes
+  most once an hour per controller. Timeouts never trigger it. Switching it
+  back on is retried, then port 80 is checked; a repair appears if it was left
+  off or the account refused the request. Each restart fires a
+  `gemstone_lights_local_restart` event (`device_id`, `entity_id`, `name`,
+  `result`, `error`). The Missed polls sensor's `local_restarts` attribute
+  counts restarts. Turning it off deletes
   the credentials unless Cloud access is on.
 - **Cloud access** (off by default): stores your Gemstone credentials so commands
   and state reads fall back to the cloud when the controller does not answer

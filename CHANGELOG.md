@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.4.1
+
+- Local recovery retries switching Allow Local Commands back on (3 tries) and
+  then checks that port 80 answers. If it stays off, a repair says so and
+  recovery tries again after 10 minutes instead of an hour.
+- Each local restart fires a `gemstone_lights_local_restart` event with
+  `device_id`, `entity_id`, `name`, `result` (`restarted`, `still_refused`,
+  `local_left_off` or `failed`) and `error`, so automations can report it.
+- A repair appears when the Gemstone account refuses a recovery request.
+- Hub settings are read on connect and then hourly instead of on every poll,
+  halving the requests each controller answers.
+- Removed the outdated 1.4.4 `REVIEW.md`.
+
 ## 2.4.0
 
 - New **Local recovery** option (Configure → Local recovery, off by default).

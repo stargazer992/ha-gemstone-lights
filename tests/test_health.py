@@ -35,3 +35,24 @@ async def test_health_sensors_track_response_time_and_missed_polls(
     assert hass.states.get(missed).state == str(LOCAL_MISSED_POLLS)
     assert hass.states.get(missed).attributes["consecutive"] == 0
     assert float(hass.states.get(response).state) >= 0
+
+
+async def test_hub_settings_are_read_on_connect_and_then_hourly(
+    hass, loaded_entry, vendor, monkeypatch
+):
+    # Given a connected controller whose settings were read on connect.
+    from custom_components.gemstone_lights import coordinator as coordinator_module
+
+    now = [coordinator_module.monotonic()]
+    monkeypatch.setattr(coordinator_module, "monotonic", lambda: now[0])
+    reads = vendor.settings_reads
+    assert reads >= 1
+    # When it is polled again within the hour.
+    now[0] += 30
+    await loaded_entry.async_refresh()
+    # Then only the playing state is read.
+    assert vendor.settings_reads == reads
+    # And after an hour the settings are read again.
+    now[0] += 3600
+    await loaded_entry.async_refresh()
+    assert vendor.settings_reads == reads + 1

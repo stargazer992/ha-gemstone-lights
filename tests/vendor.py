@@ -40,6 +40,10 @@ class Vendor:
         # True: the LAN port refuses connections until Allow Local Commands is
         # switched back on through the account.
         self.refused = False
+        # Requests switching Allow Local Commands on that fail, and their status.
+        self.enable_failures = 0
+        self.settings_status = 503
+        self.settings_reads = 0
         self.echo_writes = True
         self.first_write_started = None
         self.release_first_write = None
@@ -70,6 +74,10 @@ class Vendor:
             body = deepcopy(kwargs["json"])
             self.writes.append(("cloud", device, path, body))
             if path == "/deviceControl/deviceSettings":
+                if self.enable_failures and body.get("tcpEnabled") is not None:
+                    if body["tcpEnabled"] or self.settings_status in (401, 403):
+                        self.enable_failures -= 1
+                        return CallbackResult(status=self.settings_status)
                 if body.get("tcpEnabled") is True:
                     self.refused = False
                 for info in self.devices:
@@ -152,6 +160,8 @@ class Vendor:
             if url.path.endswith("currently-playing")
             else "hubSettings"
         )
+        if key == "hubSettings":
+            self.settings_reads += 1
         data = (
             self.states[device] if key == "currentlyPlaying" else {"firmware": "1.1.5"}
         )
