@@ -801,7 +801,9 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             await asyncio.sleep(LOCAL_RECOVERY_TOGGLE_DELAY)
             await self._async_enable_local(api, device_id)
             self._recoveries[device_id] = self._recoveries.get(device_id, 0) + 1
-            ir.async_delete_issue(self.hass, DOMAIN, "recovery_login")
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"recovery_login_{self.config_entry.entry_id}"
+            )
             result = (
                 "restarted"
                 if await self._async_lan_opens(device_id)
@@ -891,7 +893,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                "recovery_login",
+                f"recovery_login_{self.config_entry.entry_id}",
                 is_fixable=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="recovery_login",

@@ -211,5 +211,5 @@ async def test_a_refused_account_request_raises_a_login_repair(
     # Then nothing was switched off and the owner is asked to check the login.
     assert restarts[-1]["result"] == "failed"
     issues = ir.async_get(hass).issues
-    assert ("gemstone_lights", "recovery_login") in issues
+    assert ("gemstone_lights", f"recovery_login_{entry.entry_id}") in issues
     assert ("gemstone_lights", "local_left_off_hub") not in issues
