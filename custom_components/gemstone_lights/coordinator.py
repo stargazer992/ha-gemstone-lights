@@ -484,9 +484,10 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             return state
         self._via_cloud[device_id] = False
         self._refused_since.pop(device_id, None)
-        if device_id in self._left_off:
-            self._left_off.discard(device_id)
-            ir.async_delete_issue(self.hass, DOMAIN, f"local_left_off_{device_id}")
+        left_off_issue = f"local_left_off_{device_id}"
+        if ir.async_get(self.hass).async_get_issue(DOMAIN, left_off_issue):
+            ir.async_delete_issue(self.hass, DOMAIN, left_off_issue)
+        self._left_off.discard(device_id)
         reconnected = not self._local_ok.get(device_id)
         if reconnected:
             _LOGGER.info("Gemstone %s: connected via %s", device_id, client)
