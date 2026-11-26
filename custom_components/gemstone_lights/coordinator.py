@@ -850,7 +850,11 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         if not isinstance(client, GemstoneLocalApi):
             return False
         for attempt in range(LOCAL_RECOVERY_VERIFY_ATTEMPTS):
-            if await client.async_available():
+            try:
+                await client.async_get_state()
+            except GemstoneLocalError:
+                pass
+            else:
                 return True
             if attempt + 1 < LOCAL_RECOVERY_VERIFY_ATTEMPTS:
                 await asyncio.sleep(LOCAL_RECOVERY_VERIFY_DELAY)
