@@ -785,7 +785,9 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
     async def _async_restart_local(self, device_id: str) -> None:
         """Switch Allow Local Commands off and on, as the Gemstone app does."""
         api = self.recovery_api
-        result, error = "failed", None
+        # A retry after a failed switch-on starts with local commands already off.
+        result = "local_left_off" if device_id in self._left_off else "failed"
+        error = None
         try:
             _LOGGER.warning(
                 "Gemstone %s: LAN port refused for %d s; switching Allow Local "
