@@ -316,5 +316,15 @@
         }
       }
     }
+  },
+  "issues": {
+    "local_left_off": {
+      "title": "{name}: Allow Local Commands is off",
+      "description": "Local recovery switched Allow Local Commands off on {name} but could not switch it back on ({error}). Home Assistant cannot control {name} until it is on again. It retries in 10 minutes; to fix it now, open the Gemstone app → {name} → Advanced Settings and turn Allow Local Commands on."
+    },
+    "recovery_login": {
+      "title": "Gemstone account refused Local recovery",
+      "description": "The Gemstone account refused a Local recovery request ({error}). Check the email and password under Configure → Local recovery. If they are correct, Gemstone may require a newer app version; update the integration."
+    }
   }
 }

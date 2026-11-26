@@ -19,13 +19,15 @@ from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .animations import apply_animation
-from .api import GemstoneApi, GemstoneError
+from .api import GemstoneApi, GemstoneAuthError, GemstoneError, GemstoneRejectedError
 from .bluetooth_api import GemstoneBluetoothApi, GemstoneBluetoothCommandError
 from .catalog import LocalCatalog
 from .commands import serialized
@@ -43,11 +45,18 @@ from .const import (
     DEFAULT_SPEED,
     DOMAIN,
     EFFECT_SOLID,
+    EVENT_LOCAL_RESTART,
     LOCAL_MISSED_POLLS,
     LOCAL_RECOVERY_AFTER,
+    LOCAL_RECOVERY_ENABLE_ATTEMPTS,
     LOCAL_RECOVERY_GAP,
+    LOCAL_RECOVERY_LEFT_OFF_RETRY,
+    LOCAL_RECOVERY_RETRY_DELAY,
     LOCAL_RECOVERY_TOGGLE_DELAY,
+    LOCAL_RECOVERY_VERIFY_ATTEMPTS,
+    LOCAL_RECOVERY_VERIFY_DELAY,
     LOCAL_WRITE_GAP,
+    SETTINGS_REFRESH,
 )
 from .library import INDEX, PatternLibrary, library_path, write_library
 from .local_api import GemstoneLocalApi, GemstoneLocalError
@@ -117,6 +126,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         self._missed_total: dict[str, int] = {}
         self._response_ms: dict[str, float | None] = {}
         self._settings: dict[str, dict[str, Any]] = {}
+        self._settings_read: dict[str, float] = {}
         # Opt-in cloud access: which controllers were last read via the cloud.
         self._via_cloud: dict[str, bool] = {}
         self._last_reboot: dict[str, float] = {}
@@ -125,6 +135,7 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
         self._last_recovery: dict[str, float] = {}
         self._recoveries: dict[str, int] = {}
         self._recovering: set[str] = set()
+        self._left_off: set[str] = set()
 
     # -- persistence ----------------------------------------------------------
 
@@ -473,13 +484,25 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
             return state
         self._via_cloud[device_id] = False
         self._refused_since.pop(device_id, None)
-        if not self._local_ok.get(device_id):
+        left_off_issue = f"local_left_off_{device_id}"
+        if ir.async_get(self.hass).async_get_issue(DOMAIN, left_off_issue):
+            ir.async_delete_issue(self.hass, DOMAIN, left_off_issue)
+        self._left_off.discard(device_id)
+        reconnected = not self._local_ok.get(device_id)
+        if reconnected:
             _LOGGER.info("Gemstone %s: connected via %s", device_id, client)
         self._local_ok[device_id] = True
-        try:
-            self._settings[device_id] = await client.async_get_settings()
-        except GemstoneLocalError:
-            pass
+        now = monotonic()
+        if (
+            reconnected
+            or now - self._settings_read.get(device_id, float("-inf"))
+            >= SETTINGS_REFRESH
+        ):
+            try:
+                self._settings[device_id] = await client.async_get_settings()
+                self._settings_read[device_id] = now
+            except GemstoneLocalError:
+                pass
         return state
 
     # -- polling ------------------------------------------------------------
@@ -763,6 +786,9 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
     async def _async_restart_local(self, device_id: str) -> None:
         """Switch Allow Local Commands off and on, as the Gemstone app does."""
         api = self.recovery_api
+        # A retry after a failed switch-on starts with local commands already off.
+        result = "local_left_off" if device_id in self._left_off else "failed"
+        error = None
         try:
             _LOGGER.warning(
                 "Gemstone %s: LAN port refused for %d s; switching Allow Local "
@@ -771,15 +797,119 @@ class GemstoneCoordinator(ZoneMixin, DataUpdateCoordinator[dict[str, Any]]):
                 LOCAL_RECOVERY_AFTER,
             )
             await api.async_set_local_enabled(device_id, False)
+            result = "local_left_off"
             await asyncio.sleep(LOCAL_RECOVERY_TOGGLE_DELAY)
-            await api.async_set_local_enabled(device_id, True)
+            await self._async_enable_local(api, device_id)
             self._recoveries[device_id] = self._recoveries.get(device_id, 0) + 1
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"recovery_login_{self.config_entry.entry_id}"
+            )
+            result = (
+                "restarted"
+                if await self._async_lan_opens(device_id)
+                else ("still_refused")
+            )
         except GemstoneError as err:
+            error = str(err)
+            self._report_restart_failure(device_id, result, err)
+        finally:
+            self._recovering.discard(device_id)
+        self.hass.bus.async_fire(
+            EVENT_LOCAL_RESTART,
+            {
+                "device_id": device_id,
+                "entity_id": er.async_get(self.hass).async_get_entity_id(
+                    "light", DOMAIN, f"{device_id}_light"
+                ),
+                "name": self._device_name(device_id),
+                "result": result,
+                "error": error,
+            },
+        )
+
+    async def _async_enable_local(self, api: GemstoneApi, device_id: str) -> None:
+        """Switch Allow Local Commands back on, retrying a failed request."""
+        for attempt in range(LOCAL_RECOVERY_ENABLE_ATTEMPTS):
+            try:
+                await api.async_set_local_enabled(device_id, True)
+                return
+            except GemstoneError as err:
+                if attempt + 1 == LOCAL_RECOVERY_ENABLE_ATTEMPTS:
+                    raise
+                _LOGGER.warning(
+                    "Gemstone %s: switching Allow Local Commands on failed (%s); "
+                    "retrying",
+                    device_id,
+                    err,
+                )
+                await asyncio.sleep(LOCAL_RECOVERY_RETRY_DELAY)
+
+    async def _async_lan_opens(self, device_id: str) -> bool:
+        """Return True once the controller answers on its LAN port again."""
+        client = self._local.get(device_id)
+        if not isinstance(client, GemstoneLocalApi):
+            return False
+        for attempt in range(LOCAL_RECOVERY_VERIFY_ATTEMPTS):
+            try:
+                await client.async_get_state()
+            except GemstoneLocalError:
+                pass
+            else:
+                return True
+            if attempt + 1 < LOCAL_RECOVERY_VERIFY_ATTEMPTS:
+                await asyncio.sleep(LOCAL_RECOVERY_VERIFY_DELAY)
+        _LOGGER.warning(
+            "Gemstone %s: LAN port still refused after the local restart", device_id
+        )
+        return False
+
+    def _report_restart_failure(
+        self, device_id: str, result: str, err: GemstoneError
+    ) -> None:
+        """Log a failed restart and raise a repair when it needs the owner."""
+        name = self._device_name(device_id)
+        if result == "local_left_off":
+            _LOGGER.error(
+                "Gemstone %s: Allow Local Commands was switched off but could not "
+                "be switched back on (%s)",
+                device_id,
+                err,
+            )
+            self._left_off.add(device_id)
+            # Try again sooner than the hourly limit; the LAN stays closed until then.
+            self._last_recovery[device_id] = (
+                monotonic() - LOCAL_RECOVERY_GAP + LOCAL_RECOVERY_LEFT_OFF_RETRY
+            )
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"local_left_off_{device_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="local_left_off",
+                translation_placeholders={"name": name, "error": str(err)},
+            )
+        else:
             _LOGGER.warning(
                 "Gemstone %s: could not restart local control (%s)", device_id, err
             )
-        finally:
-            self._recovering.discard(device_id)
+        if isinstance(err, (GemstoneAuthError, GemstoneRejectedError)):
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"recovery_login_{self.config_entry.entry_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="recovery_login",
+                translation_placeholders={"error": str(err)},
+            )
+
+    def _device_name(self, device_id: str) -> str:
+        """Return the controller's name for messages."""
+        for device in self._known_devices:
+            if device.get("id") == device_id:
+                return device.get("name") or device_id
+        return device_id
 
     # -- opt-in cloud -----------------------------------------------------------
 

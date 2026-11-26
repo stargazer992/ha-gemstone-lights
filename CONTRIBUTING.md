@@ -62,4 +62,3 @@ commits when merging a release PR.
 - [Bluetooth protocol](BLUETOOTH_PROTOCOL.md): local Bluetooth transport.
 - [Native management](MANAGEMENT_PROTOCOL.md): zone, timer and device settings
   research, including features not implemented by the integration.
-- [Repository review](REVIEW.md): implementation findings and fixes.
