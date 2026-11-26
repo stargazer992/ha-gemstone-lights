@@ -34,6 +34,10 @@ jobs:
             echo "$tag is already released"
             exit 0
           fi
+          if [ "$draft" = "true" ]; then
+            echo "A draft release for $tag exists; publish or delete it by hand" >&2
+            exit 1
+          fi
           awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {if (f) exit} f' CHANGELOG.md > notes.md
           if ! grep -q . notes.md; then
             echo "CHANGELOG.md has no '## $version' section" >&2
@@ -41,8 +45,4 @@ jobs:
           fi
           newest=$( (gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName -q '.[].tagName'; echo "$tag") | sort -V | tail -n 1)
           latest=$([ "$newest" = "$tag" ] && echo true || echo false)
-          if [ "$draft" = "true" ]; then
-            gh release edit "$tag" --draft=false --title "$tag" --notes-file notes.md --target "$SHA" --latest="$latest"
-          else
-            gh release create "$tag" --title "$tag" --notes-file notes.md --target "$SHA" --latest="$latest"
-          fi
+          gh release create "$tag" --title "$tag" --notes-file notes.md --target "$SHA" --latest="$latest"
