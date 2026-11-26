@@ -42,4 +42,6 @@ jobs:
             echo "CHANGELOG.md has no '## $version' section" >&2
             exit 1
           fi
-          gh release create "$tag" --title "$tag" --notes-file notes.md --target "$SHA" --latest
+          newest=$( (gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName -q '.[].tagName'; echo "$tag") | sort -V | tail -n 1)
+          latest=$([ "$newest" = "$tag" ] && echo true || echo false)
+          gh release create "$tag" --title "$tag" --notes-file notes.md --target "$SHA" --latest="$latest"
